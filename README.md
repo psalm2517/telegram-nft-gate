@@ -97,6 +97,13 @@ Then run it:
 pnpm run db:migrate:local && pnpm run build:web && pnpm run dev
 ```
 
+Once deployed, this handles the Telegram-side wiring (group id, webhook
+registration) in one guided run instead of a string of `curl` commands:
+
+```bash
+TELEGRAM_BOT_TOKEN=<token> pnpm run setup:telegram https://<your-worker>.workers.dev
+```
+
 Full setup lives in [`docs/deployment.md`](docs/deployment.md), with Telegram
 specifics in [`docs/telegram-setup.md`](docs/telegram-setup.md).
 

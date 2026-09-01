@@ -24,7 +24,8 @@
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
     "cf-typegen": "wrangler types",
-    "validate:collection": "node --experimental-transform-types scripts/validate-collection.ts"
+    "validate:collection": "node --experimental-transform-types scripts/validate-collection.ts",
+    "setup:telegram": "node --experimental-transform-types scripts/setup-telegram.ts"
   },
   "dependencies": {
     "@noble/curves": "^2.4.0",

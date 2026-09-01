@@ -50,31 +50,50 @@ regains eligibility can rejoin with a fresh invite link.
 > The bot cannot remove another administrator. Promote members to admin
 > sparingly, and be aware that admins are effectively exempt from enforcement.
 
-## 3. Find the group id
+## 3. Group id and webhook — the easy way
 
-Add the bot to the group, send any message there, then:
+Once the Worker is deployed, this does the rest of the Telegram-side setup for
+you: finds `TELEGRAM_GROUP_ID` automatically, generates a webhook secret if you
+don't already have one, registers the webhook with the right `allowed_updates`,
+and confirms Telegram accepted it.
+
+```bash
+TELEGRAM_BOT_TOKEN=<your-bot-token> pnpm run setup:telegram https://<your-worker>.workers.dev
+```
+
+It walks you through adding the bot to your group and sending a message, then
+polls for it — nothing to copy-paste between commands. At the end it prints
+`TELEGRAM_GROUP_ID` and `TELEGRAM_WEBHOOK_SECRET` for you to paste into the
+Cloudflare dashboard (or `.dev.vars` locally).
+
+It only talks to the Telegram Bot API, so it needs nothing from your Cloudflare
+account.
+
+## 4. Find admin Telegram user ids
+
+Each admin messages [@userinfobot](https://t.me/userinfobot), or check the `from.id`
+field in `getUpdates` (see below). Put them comma-separated into
+`ADMIN_TELEGRAM_IDS`.
+
+These are *numeric ids*, not usernames. Usernames can be changed and reassigned;
+ids cannot.
+
+## Doing it by hand
+
+If you'd rather not run a script, or want to see exactly what it's doing, here
+is the manual version of step 3.
+
+**Find the group id.** Add the bot to the group, send any message there, then:
 
 ```bash
 curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/getUpdates" | jq '.result[].message.chat'
 ```
 
 Supergroup ids are negative and begin with `-100`, e.g. `-1001234567890`. That is
-`TELEGRAM_GROUP_ID`.
+`TELEGRAM_GROUP_ID`. If this returns nothing, a webhook is already registered —
+delete it first with `deleteWebhook`, read the id, then set the webhook again.
 
-If `getUpdates` returns nothing, a webhook is already registered — delete it
-first with `deleteWebhook`, read the id, then set the webhook again.
-
-## 4. Find admin Telegram user ids
-
-Each admin messages [@userinfobot](https://t.me/userinfobot), or check the `from.id`
-field in `getUpdates`. Put them comma-separated into `ADMIN_TELEGRAM_IDS`.
-
-These are *numeric ids*, not usernames. Usernames can be changed and reassigned;
-ids cannot.
-
-## 5. Register the webhook
-
-After deploying the Worker:
+**Register the webhook.** After deploying the Worker:
 
 ```bash
 curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
