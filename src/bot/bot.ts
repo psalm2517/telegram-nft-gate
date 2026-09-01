@@ -1,11 +1,19 @@
 import { Bot, type Context } from 'grammy';
 import type { UserFromGetMe } from 'grammy/types';
+import {
+  clearPendingGroup,
+  getConfiguredGroupId,
+  getPendingGroup,
+  setConfiguredGroupId,
+  setPendingGroup,
+} from '../config-store.js';
 import type { Config } from '../env.js';
 import { signToken } from '../lib/token.js';
 import type { AccessService } from '../services/access.js';
 import type { Database, UserRow } from '../services/db.js';
 import type { OwnershipChecker } from '../services/ownership.js';
 import type { RateLimiter } from '../services/ratelimit.js';
+import type { TelegramClient } from '../services/telegram.js';
 
 export interface BotDeps {
   config: Config;
@@ -13,6 +21,8 @@ export interface BotDeps {
   access: AccessService;
   ownership: OwnershipChecker;
   rateLimiter: RateLimiter;
+  telegram: TelegramClient;
+  kv: KVNamespace;
   baseUrl: string;
 }
 
@@ -41,6 +51,7 @@ const HELP_TEXT = [
 const ADMIN_HELP_TEXT = [
   'Admin commands:',
   '',
+  '/setup — check or configure which group this bot gates',
   '/adminstats — membership counts and migration progress',
   '/adminusers <query> — search by Telegram id, username or wallet',
   '/adminrecheck <telegram_id> — run a live ownership check on one user',
@@ -207,6 +218,100 @@ export function createBot(deps: BotDeps, botInfo?: UserFromGetMe): Bot {
 
   // ---------------------------------------------------------------- admin --
 
+  /**
+   * The single entry point for "which group does this gate?" — status when
+   * called bare, confirms an auto-detected group, or pins one directly by id.
+   * This is what replaces pre-deploy TELEGRAM_GROUP_ID discovery: add the bot
+   * to a group and talk to it from here, nothing else required.
+   */
+  bot.command('setup', async (ctx) => {
+    const adminId = await requireAdmin(ctx);
+    if (!adminId) return;
+
+    const [subcommand, ...rest] = ctx.match.toString().trim().split(/\s+/);
+    const configuredId = await getConfiguredGroupId(deps.kv);
+
+    if (!subcommand) {
+      const pending = await getPendingGroup(deps.kv);
+      const lines = [
+        configuredId
+          ? `Configured group: ${configuredId}`
+          : 'No group configured yet.',
+      ];
+      if (pending && pending.id !== configuredId) {
+        lines.push(
+          '',
+          `Pending: "${pending.title}" (${pending.id}) — detected when I was added to it.`,
+          'Run /setup confirm to use this group, or ignore this if it was unexpected.',
+        );
+      } else if (!configuredId) {
+        lines.push(
+          '',
+          'Add me to your group as admin (Invite Users via Link, Ban Users), then',
+          "I'll message you here to confirm. Or run /setup group <id> if you",
+          'already know the chat id.',
+        );
+      }
+      lines.push(
+        '',
+        `Collection: ${deps.config.nftCollectionId}`,
+        `Migration mode: ${deps.config.migrationMode ? 'on' : 'off'}`,
+        `Grace period: ${deps.config.gracePeriodHours}h`,
+      );
+      await ctx.reply(lines.join('\n'));
+      return;
+    }
+
+    if (subcommand === 'confirm') {
+      const pending = await getPendingGroup(deps.kv);
+      if (!pending) {
+        await ctx.reply(
+          'Nothing pending. Add me to the group you want to gate first — I\'ll message you here once I am.',
+        );
+        return;
+      }
+      await setConfiguredGroupId(deps.kv, pending.id);
+      await clearPendingGroup(deps.kv);
+      await deps.db.recordAdminAction({
+        adminTelegramId: adminId,
+        action: 'setup_group_confirmed',
+        details: { groupId: pending.id, title: pending.title },
+      });
+      await ctx.reply(`Done. Now gating "${pending.title}" (${pending.id}).`);
+      return;
+    }
+
+    if (subcommand === 'group') {
+      const targetId = rest.join(' ').trim();
+      if (!targetId) {
+        await ctx.reply('Usage: /setup group <chat_id>');
+        return;
+      }
+      const chat = await deps.telegram.getChat(targetId);
+      if (!chat.ok) {
+        await ctx.reply(
+          `Could not find that chat (${chat.error}). Make sure I have already been added to it.`,
+        );
+        return;
+      }
+      if (chat.value.type !== 'group' && chat.value.type !== 'supergroup') {
+        await ctx.reply('That chat is not a group or supergroup.');
+        return;
+      }
+      await setConfiguredGroupId(deps.kv, targetId);
+      await clearPendingGroup(deps.kv);
+      await deps.db.recordAdminAction({
+        adminTelegramId: adminId,
+        action: 'setup_group_pinned',
+        details: { groupId: targetId, title: chat.value.title ?? null },
+      });
+      await ctx.reply(`Done. Now gating "${chat.value.title ?? targetId}" (${targetId}).`);
+      return;
+    }
+
+    await ctx.reply('Usage: /setup, /setup confirm, or /setup group <chat_id>');
+  });
+
   bot.command('adminhelp', async (ctx) => {
     if (!(await requireAdmin(ctx))) return;
     await ctx.reply(ADMIN_HELP_TEXT);
@@ -367,6 +472,36 @@ export function createBot(deps: BotDeps, botInfo?: UserFromGetMe): Bot {
       await ctx.api
         .sendMessage(targetId, `Your single-use invite link:\n${decision.inviteLink}`)
         .catch(() => {});
+    }
+  });
+
+  /**
+   * Detect being added to a group and ask an admin to confirm it via /setup,
+   * rather than requiring TELEGRAM_GROUP_ID to be known before deploy.
+   */
+  bot.on('my_chat_member', async (ctx) => {
+    const update = ctx.myChatMember;
+    if (update.chat.type !== 'group' && update.chat.type !== 'supergroup') return;
+    if (update.new_chat_member.user.id !== ctx.me.id) return; // some other bot/member change
+
+    const joined = ['member', 'administrator'].includes(update.new_chat_member.status);
+    if (!joined) return;
+
+    const groupId = String(update.chat.id);
+    const title = update.chat.title ?? groupId;
+    const configuredId = await getConfiguredGroupId(deps.kv);
+    if (configuredId === groupId) return; // already the confirmed group, nothing to do
+
+    await setPendingGroup(deps.kv, { id: groupId, title, detectedAt: new Date().toISOString() });
+
+    const text = [
+      `I was just added to "${title}" (${groupId}).`,
+      '',
+      'Reply here with /setup confirm to make this the gated group.',
+      "If this wasn't you, remove me from that group and ignore this message.",
+    ].join('\n');
+    for (const admin of deps.config.adminTelegramIds) {
+      await deps.telegram.sendMessage(admin, text).catch(() => {});
     }
   });
 

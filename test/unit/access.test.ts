@@ -27,7 +27,7 @@ describe('access state machine', () => {
   let ctx: TestContext;
   beforeEach(async () => {
     await resetDatabase();
-    ctx = buildContext();
+    ctx = await buildContext();
   });
 
   it('grants access and issues a single-use invite to a new holder', async () => {
@@ -179,7 +179,7 @@ describe('access state machine', () => {
 describe('migration mode', () => {
   it('never auto-removes a pre-existing member, even past the grace window', async () => {
     await resetDatabase();
-    const ctx = buildContext({ MIGRATION_MODE: 'true' });
+    const ctx = await buildContext({ MIGRATION_MODE: 'true' });
     await ctx.db.upsertUser('1', 'legacy', { isLegacyMember: true });
     await ctx.db.updateUser('1', {
       wallet_address: walletFor('1'),
@@ -202,7 +202,7 @@ describe('migration mode', () => {
 
   it('still lets an admin explicitly revoke a legacy member', async () => {
     await resetDatabase();
-    const ctx = buildContext({ MIGRATION_MODE: 'true' });
+    const ctx = await buildContext({ MIGRATION_MODE: 'true' });
     await ctx.db.upsertUser('1', 'legacy', { isLegacyMember: true });
     await ctx.db.updateUser('1', { wallet_address: walletFor('1'), status: 'eligible' });
     const user = (await ctx.db.getUserByTelegramId('1'))!;
@@ -214,7 +214,7 @@ describe('migration mode', () => {
 
   it('removes a non-legacy member normally while migration mode is on', async () => {
     await resetDatabase();
-    const ctx = buildContext({ MIGRATION_MODE: 'true' });
+    const ctx = await buildContext({ MIGRATION_MODE: 'true' });
     await ctx.db.upsertUser('2', 'newcomer');
     await ctx.db.updateUser('2', {
       wallet_address: walletFor('2'), status: 'grace', grace_period_started_at: hoursAgo(100),
@@ -228,7 +228,7 @@ describe('migration mode', () => {
 
   it('enforces normally once migration mode is off', async () => {
     await resetDatabase();
-    const ctx = buildContext({ MIGRATION_MODE: 'false' });
+    const ctx = await buildContext({ MIGRATION_MODE: 'false' });
     await ctx.db.upsertUser('1', 'legacy', { isLegacyMember: true });
     await ctx.db.updateUser('1', {
       wallet_address: walletFor('2'), status: 'grace', grace_period_started_at: hoursAgo(100),
@@ -245,7 +245,7 @@ describe('scheduled recheck', () => {
   let ctx: TestContext;
   beforeEach(async () => {
     await resetDatabase();
-    ctx = buildContext();
+    ctx = await buildContext();
   });
 
   it('re-checks due users and applies the right transitions', async () => {
@@ -324,7 +324,7 @@ describe('scheduled recheck', () => {
   });
 
   it('honours the batch size limit', async () => {
-    const ctxSmall = buildContext({ RECHECK_BATCH_SIZE: '2' });
+    const ctxSmall = await buildContext({ RECHECK_BATCH_SIZE: '2' });
     for (const id of ['1', '2', '3', '4', '5']) {
       await ctxSmall.db.upsertUser(id, id);
       await ctxSmall.db.updateUser(id, {

@@ -109,6 +109,15 @@ export class TelegramClient {
     return this.call('getChatMember', { chat_id: this.options.groupId, user_id: userId });
   }
 
+  /**
+   * Look up an arbitrary chat by id — unlike every other method here, this is
+   * not scoped to the configured group, because it exists to validate a chat
+   * *before* it becomes the configured group (see /setup group <id>).
+   */
+  async getChat(chatId: string): Promise<TelegramOutcome<{ id: number; type: string; title?: string }>> {
+    return this.call('getChat', { chat_id: chatId });
+  }
+
   /** True when the user is currently inside the group in any non-exiting state. */
   async isMember(userId: string): Promise<TelegramOutcome<boolean>> {
     const res = await this.getChatMember(userId);

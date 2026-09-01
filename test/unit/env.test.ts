@@ -53,3 +53,19 @@ describe('MIGRATION_MODE default', () => {
     expect(config.migrationMode).toBe(true);
   });
 });
+
+describe('TELEGRAM_GROUP_ID resolution', () => {
+  it('resolves to an empty string when neither env nor KV has a group configured', () => {
+    const config = loadConfig(baseEnv({ TELEGRAM_GROUP_ID: undefined }));
+    expect(config.telegramGroupId).toBe('');
+  });
+
+  it('does not require TELEGRAM_GROUP_ID to pass config validation', () => {
+    expect(() => loadConfig(baseEnv({ TELEGRAM_GROUP_ID: undefined }))).not.toThrow();
+  });
+
+  it('uses the env value when set', () => {
+    const config = loadConfig(baseEnv({ TELEGRAM_GROUP_ID: '-1009999' }));
+    expect(config.telegramGroupId).toBe('-1009999');
+  });
+});

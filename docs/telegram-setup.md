@@ -50,50 +50,24 @@ regains eligibility can rejoin with a fresh invite link.
 > The bot cannot remove another administrator. Promote members to admin
 > sparingly, and be aware that admins are effectively exempt from enforcement.
 
-## 3. Group id and webhook — the easy way
+## 3. Register the webhook
 
-Once the Worker is deployed, this does the rest of the Telegram-side setup for
-you: finds `TELEGRAM_GROUP_ID` automatically, generates a webhook secret if you
-don't already have one, registers the webhook with the right `allowed_updates`,
-and confirms Telegram accepted it.
+This is the one step that can't be conversational: the bot has no way to talk
+to you until Telegram knows where to send updates. Once the Worker is
+deployed:
 
 ```bash
 TELEGRAM_BOT_TOKEN=<your-bot-token> pnpm run setup:telegram https://<your-worker>.workers.dev
 ```
 
-It walks you through adding the bot to your group and sending a message, then
-polls for it — nothing to copy-paste between commands. At the end it prints
-`TELEGRAM_GROUP_ID` and `TELEGRAM_WEBHOOK_SECRET` for you to paste into the
-Cloudflare dashboard (or `.dev.vars` locally).
+This generates a webhook secret if you don't already have one, registers the
+webhook with the right `allowed_updates`, and confirms Telegram accepted it. It
+only talks to the Telegram Bot API — it needs nothing from your Cloudflare
+account. Set the printed `TELEGRAM_WEBHOOK_SECRET` in the dashboard (or
+`.dev.vars` locally) if it generated one for you.
 
-It only talks to the Telegram Bot API, so it needs nothing from your Cloudflare
-account.
-
-## 4. Find admin Telegram user ids
-
-Each admin messages [@userinfobot](https://t.me/userinfobot), or check the `from.id`
-field in `getUpdates` (see below). Put them comma-separated into
-`ADMIN_TELEGRAM_IDS`.
-
-These are *numeric ids*, not usernames. Usernames can be changed and reassigned;
-ids cannot.
-
-## Doing it by hand
-
-If you'd rather not run a script, or want to see exactly what it's doing, here
-is the manual version of step 3.
-
-**Find the group id.** Add the bot to the group, send any message there, then:
-
-```bash
-curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/getUpdates" | jq '.result[].message.chat'
-```
-
-Supergroup ids are negative and begin with `-100`, e.g. `-1001234567890`. That is
-`TELEGRAM_GROUP_ID`. If this returns nothing, a webhook is already registered —
-delete it first with `deleteWebhook`, read the id, then set the webhook again.
-
-**Register the webhook.** After deploying the Worker:
+<details>
+<summary>Doing it by hand instead</summary>
 
 ```bash
 curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
@@ -101,20 +75,22 @@ curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
   -d '{
         "url": "https://<your-worker>/telegram/webhook",
         "secret_token": "<TELEGRAM_WEBHOOK_SECRET>",
-        "allowed_updates": ["message", "chat_member"],
+        "allowed_updates": ["message", "chat_member", "my_chat_member"],
         "drop_pending_updates": true
       }'
 ```
 
-Two details are load-bearing:
+Three details are load-bearing:
 
 - **`secret_token`** must match your `TELEGRAM_WEBHOOK_SECRET`. Telegram does not
   sign webhook requests, so this shared header is the only thing distinguishing
   real updates from anyone who guesses the URL. The Worker rejects mismatches
   with a 403.
-- **`chat_member`** must be in `allowed_updates`. It is not delivered by default,
-  and without it the bot cannot see joins and leaves — which migration mode
-  depends on to flag pre-existing members.
+- **`chat_member`** must be in `allowed_updates`, or the bot cannot see other
+  members joining/leaving — which migration mode depends on.
+- **`my_chat_member`** must be in `allowed_updates`, or the bot cannot tell when
+  *it itself* has been added to a group — which `/setup` (next section) depends
+  on entirely.
 
 Verify:
 
@@ -124,6 +100,38 @@ curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/getWebhookInfo" | jq
 
 `pending_update_count` should stay near zero and `last_error_message` should be
 absent.
+</details>
+
+## 4. Find admin Telegram user ids
+
+Each admin messages [@userinfobot](https://t.me/userinfobot), or checks the
+`from.id` field on any update. Put them comma-separated into
+`ADMIN_TELEGRAM_IDS` *before* step 5 — the bot only DMs ids already on that
+list.
+
+These are *numeric ids*, not usernames. Usernames can be changed and reassigned;
+ids cannot.
+
+## 5. Choose which group to gate — by messaging the bot
+
+`TELEGRAM_GROUP_ID` does not need to be set before any of this. Instead:
+
+1. Message the bot `/start` in a private chat, to confirm the webhook works.
+2. Add the bot to your group (see permissions above) and promote it to admin.
+3. The bot notices — it detects the `my_chat_member` update Telegram sends when
+   it's added anywhere — and DMs every id in `ADMIN_TELEGRAM_IDS`:
+   > I was just added to "Your Group" (-1001234567890).
+   > Reply here with /setup confirm to make this the gated group.
+4. Reply `/setup confirm`. That's it — no id to copy from anywhere.
+
+`/setup` on its own shows current status (configured group, migration mode,
+grace period, anything still pending confirmation). `/setup group <id>` pins a
+group directly by id instead, if you already know it and would rather skip the
+DM — the bot validates it can actually see that chat before accepting it.
+
+A group confirmed this way always takes precedence over a `TELEGRAM_GROUP_ID`
+env var, so `/setup` can also be used to re-point an existing deployment at a
+different group later.
 
 ## 6. Confirm it works
 
@@ -140,11 +148,12 @@ Admins additionally see a note on `/status` pointing them to `/adminhelp`.
 
 ## Admin commands
 
-Once an admin's numeric Telegram id is in `ADMIN_TELEGRAM_IDS`, they get five
+Once an admin's numeric Telegram id is in `ADMIN_TELEGRAM_IDS`, they get these
 extra commands in their private chat with the bot:
 
 | Command | Does |
 | --- | --- |
+| `/setup` | Check or configure which group is gated (see step 5 above) |
 | `/adminhelp` | Lists these commands |
 | `/adminstats` | Membership counts and migration progress |
 | `/adminusers <query>` | Search by Telegram id, username, or wallet substring |

@@ -53,7 +53,7 @@ export default {
   async fetch(request: Request, env: Env, _executionCtx: ExecutionContext): Promise<Response> {
     let ctx: AppContext;
     try {
-      ctx = createContext(env, request.url);
+      ctx = await createContext(env, request.url);
     } catch (err) {
       if (err instanceof ConfigError) {
         // Misconfiguration is an operator problem; make it loud in logs but do not
@@ -79,7 +79,7 @@ export default {
   },
 
   async scheduled(_event: ScheduledController, env: Env, executionCtx: ExecutionContext): Promise<void> {
-    const ctx = createContext(env);
+    const ctx = await createContext(env);
     executionCtx.waitUntil(
       runScheduledRecheck(ctx)
         .then((summary) => console.log('scheduled recheck complete', summary))

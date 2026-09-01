@@ -120,8 +120,8 @@ export interface TestContext extends AppContext {
 }
 
 /** Build a real AppContext with the network-facing services swapped for fakes. */
-export function buildContext(overrides: Partial<Env> = {}): TestContext {
-  const ctx = createContext({ ...(env as unknown as Env), ...overrides }, 'https://gate.example/');
+export async function buildContext(overrides: Partial<Env> = {}): Promise<TestContext> {
+  const ctx = await createContext({ ...(env as unknown as Env), ...overrides }, 'https://gate.example/');
   const fakeOwnership = new FakeOwnership();
   const fakeTelegram = new FakeTelegram();
 

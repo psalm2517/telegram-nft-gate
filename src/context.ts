@@ -1,3 +1,4 @@
+import { getConfiguredGroupId } from './config-store.js';
 import { loadConfig, type Config, type Env } from './env.js';
 import { AccessService } from './services/access.js';
 import { Database } from './services/db.js';
@@ -22,10 +23,17 @@ export interface AppContext {
  * Build the service graph for one request/invocation.
  *
  * Workers give no safe place for cross-request singletons that hold config, so
- * this is constructed per invocation. It is cheap: no I/O happens here.
+ * this is constructed per invocation. The only I/O here is the KV read below.
  */
-export function createContext(env: Env, requestUrl?: string): AppContext {
+export async function createContext(env: Env, requestUrl?: string): Promise<AppContext> {
   const config = loadConfig(env);
+
+  // A group confirmed at runtime via /setup always wins over a deploy-time
+  // TELEGRAM_GROUP_ID, so /setup can (re)point the gate even for a deployment
+  // that originally pinned a group through the env var.
+  const confirmedGroupId = await getConfiguredGroupId(env.KV);
+  if (confirmedGroupId) config.telegramGroupId = confirmedGroupId;
+
   const db = new Database(env.DB);
   const telegram = new TelegramClient({
     botToken: config.telegramBotToken,

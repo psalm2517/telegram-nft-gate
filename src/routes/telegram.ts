@@ -60,6 +60,8 @@ export async function handleTelegramWebhook(
       db: ctx.db,
       access: ctx.access,
       ownership: ctx.ownership,
+      telegram: ctx.telegram,
+      kv: ctx.env.KV,
       rateLimiter: ctx.rateLimiter,
       baseUrl: ctx.baseUrl,
     },

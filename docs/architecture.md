@@ -162,6 +162,30 @@ probing command names cannot distinguish "does not exist" from "exists but
 you're not authorized". Removing an id from `ADMIN_TELEGRAM_IDS` and
 redeploying revokes admin access immediately.
 
+## Group configuration
+
+`TELEGRAM_GROUP_ID` is an optional deploy-time default, not the source of
+truth. `src/config-store.ts` holds two KV-backed values that take precedence:
+
+- `config:telegram_group_id` — the confirmed gate target, set by an admin via
+  `/setup confirm` or `/setup group <id>` in `src/bot/bot.ts`.
+- `pending:group_detect` — a group the bot was just added to (detected via the
+  `my_chat_member` webhook update), awaiting that confirmation. Expires after
+  seven days if nobody acts on it.
+
+`context.ts` resolves the effective group id on every request: KV value if
+present, else `TELEGRAM_GROUP_ID`, else an empty string. This lets an operator
+either pin a group at deploy time (useful for reproducible, config-as-code
+deployments) or skip that entirely and configure it conversationally after the
+Worker is already live — `/setup` can always override a pinned value later,
+since KV wins.
+
+An unconfigured group is not a startup error: `loadConfig` never requires it.
+Telegram calls that need a real chat id (invites, removals, membership checks)
+simply fail with an ordinary `TelegramOutcome` error until one is confirmed,
+which the rest of the system already treats the same way it treats any other
+Telegram API failure.
+
 ## Rate limiting
 
 KV-backed fixed windows on `/verify` and `/status` commands, challenge issuance

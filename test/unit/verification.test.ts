@@ -20,7 +20,7 @@ describe('wallet signature verification', () => {
   let ctx: TestContext;
   beforeEach(async () => {
     await resetDatabase();
-    ctx = buildContext();
+    ctx = await buildContext();
   });
 
   it('accepts a valid signature from a holder and grants access', async () => {
@@ -110,7 +110,7 @@ describe('replay and substitution protection', () => {
   let ctx: TestContext;
   beforeEach(async () => {
     await resetDatabase();
-    ctx = buildContext();
+    ctx = await buildContext();
   });
 
   it('refuses to reuse a nonce that already succeeded', async () => {
@@ -260,7 +260,7 @@ describe('ownership outcomes at verification time', () => {
   let ctx: TestContext;
   beforeEach(async () => {
     await resetDatabase();
-    ctx = buildContext();
+    ctx = await buildContext();
   });
 
   it('denies a non-holder with a valid signature', async () => {

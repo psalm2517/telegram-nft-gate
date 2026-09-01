@@ -17,7 +17,8 @@ export interface Env {
 
   // secrets
   TELEGRAM_BOT_TOKEN: string;
-  TELEGRAM_GROUP_ID: string;
+  /** Optional: omit to confirm the group conversationally instead (see /confirmgroup). */
+  TELEGRAM_GROUP_ID?: string;
   TELEGRAM_WEBHOOK_SECRET?: string;
   NFT_COLLECTION_ID: string;
   /** Optional: omit to fall back to the public Solana RPC (see DAS_ENDPOINT). */
@@ -63,7 +64,7 @@ const telegramId = z.string().regex(/^-?\d{1,20}$/, 'must be a numeric Telegram 
 export const configSchema = z.object({
   appName: z.string().min(1).default('telegram-nft-gate'),
   telegramBotToken: z.string().min(20, 'TELEGRAM_BOT_TOKEN is missing or malformed'),
-  telegramGroupId: telegramId,
+  telegramGroupId: telegramId.optional(),
   telegramWebhookSecret: z.string().min(1).optional(),
   /**
    * The on-chain certified collection id. Operator-supplied and validated at setup;
@@ -82,7 +83,15 @@ export const configSchema = z.object({
   publicBaseUrl: z.string().url().optional(),
 });
 
-export type Config = z.infer<typeof configSchema> & { dasEndpoint: string };
+export type Config = Omit<z.infer<typeof configSchema>, 'telegramGroupId'> & {
+  dasEndpoint: string;
+  /**
+   * Always a string once loadConfig returns — '' when no group has been
+   * configured or confirmed yet. context.ts may still overwrite this with a
+   * value confirmed at runtime via KV; see createContext.
+   */
+  telegramGroupId: string;
+};
 
 /**
  * Default DAS-compatible endpoint used when no HELIUS_API_KEY is configured.
@@ -106,7 +115,7 @@ export function loadConfig(env: Env): Config {
   const parsed = configSchema.safeParse({
     appName: env.APP_NAME || 'telegram-nft-gate',
     telegramBotToken: env.TELEGRAM_BOT_TOKEN,
-    telegramGroupId: env.TELEGRAM_GROUP_ID,
+    telegramGroupId: env.TELEGRAM_GROUP_ID || undefined,
     telegramWebhookSecret: env.TELEGRAM_WEBHOOK_SECRET || undefined,
     nftCollectionId: env.NFT_COLLECTION_ID,
     heliusApiKey: env.HELIUS_API_KEY || undefined,
@@ -141,5 +150,5 @@ export function loadConfig(env: Env): Config {
       ? `https://mainnet.helius-rpc.com/?api-key=${parsed.data.heliusApiKey}`
       : PUBLIC_SOLANA_RPC);
 
-  return { ...parsed.data, dasEndpoint };
+  return { ...parsed.data, dasEndpoint, telegramGroupId: parsed.data.telegramGroupId ?? '' };
 }

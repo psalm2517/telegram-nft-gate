@@ -40,6 +40,7 @@ const RESULTS: Record<string, unknown> = {
   sendMessage: { message_id: 1 },
   createChatInviteLink: { invite_link: 'https://t.me/+singleuse' },
   getChatMember: { status: 'left' },
+  getChat: { id: -100999, type: 'supergroup', title: 'Default Test Group' },
   banChatMember: true,
   unbanChatMember: true,
 };
@@ -71,6 +72,8 @@ afterAll(() => {
 beforeEach(async () => {
   await resetDatabase();
   await env.KV.delete('telegram:bot-info');
+  await env.KV.delete('config:telegram_group_id');
+  await env.KV.delete('pending:group_detect');
   sent.length = 0;
 });
 
@@ -271,6 +274,134 @@ describe('admin commands over the real webhook', () => {
 
     sent.length = 0;
     await sendUpdate(command('/adminhelp', NOT_ADMIN_ID));
+    expect(String(sent.find((c) => c.method === 'sendMessage')?.body.text)).toBe('Unknown command.');
+  });
+});
+
+describe('group setup via the bot', () => {
+  const ADMIN_ID = 111111; // matches ADMIN_TELEGRAM_IDS in vitest.config.ts
+  const NEW_GROUP_ID = -100777888;
+  const BOT_OWN_ID = BOT_INFO.id;
+
+  const myChatMemberUpdate = (status: 'member' | 'administrator' | 'left', title = 'New Community') => ({
+    update_id: updateId++,
+    my_chat_member: {
+      chat: { id: NEW_GROUP_ID, type: 'supergroup', title },
+      from: { id: ADMIN_ID, is_bot: false, first_name: 'Admin' },
+      date: Math.floor(Date.now() / 1000),
+      old_chat_member: { status: 'left', user: { id: BOT_OWN_ID, is_bot: true, first_name: 'Gate Bot' } },
+      new_chat_member: {
+        status,
+        user: { id: BOT_OWN_ID, is_bot: true, first_name: 'Gate Bot', username: 'gate_bot' },
+      },
+    },
+  });
+
+  const setupCommand = (text: string, userId = ADMIN_ID) => {
+    const update = command(text, userId);
+    update.message.text = text;
+    update.message.entities = [{ type: 'bot_command', offset: 0, length: text.split(' ')[0]!.length }];
+    return update;
+  };
+
+  it('detects being added to a group and DMs admins to confirm', async () => {
+    await sendUpdate(myChatMemberUpdate('administrator'));
+
+    const pending = await env.KV.get('pending:group_detect', 'json') as { id: string; title: string } | null;
+    expect(pending).toMatchObject({ id: String(NEW_GROUP_ID), title: 'New Community' });
+
+    const dm = sent.find(
+      (c) => c.method === 'sendMessage' && c.body.chat_id === String(ADMIN_ID),
+    );
+    expect(String(dm?.body.text)).toMatch(/New Community/);
+    expect(String(dm?.body.text)).toMatch(/\/setup confirm/);
+  });
+
+  it('ignores my_chat_member updates about someone else, not the bot itself', async () => {
+    const update = myChatMemberUpdate('member');
+    update.my_chat_member.new_chat_member.user.id = 999999; // a human, not the bot
+    await sendUpdate(update);
+    expect(await env.KV.get('pending:group_detect')).toBeNull();
+  });
+
+  it('ignores the bot leaving (does not create a pending confirmation)', async () => {
+    await sendUpdate(myChatMemberUpdate('left'));
+    expect(await env.KV.get('pending:group_detect')).toBeNull();
+  });
+
+  it('does not re-notify for a group that is already configured', async () => {
+    await env.KV.put('config:telegram_group_id', String(NEW_GROUP_ID));
+    await sendUpdate(myChatMemberUpdate('administrator'));
+    expect(await env.KV.get('pending:group_detect')).toBeNull();
+    expect(sent.find((c) => c.method === 'sendMessage')).toBeUndefined();
+  });
+
+  it('/setup with nothing configured explains how to get started', async () => {
+    await sendUpdate(setupCommand('/setup'));
+    const text = String(sent.find((c) => c.method === 'sendMessage')?.body.text);
+    expect(text).toMatch(/No group configured yet/);
+  });
+
+  it('/setup shows a pending group and lets you confirm it', async () => {
+    await sendUpdate(myChatMemberUpdate('administrator'));
+    sent.length = 0;
+
+    await sendUpdate(setupCommand('/setup'));
+    expect(String(sent.find((c) => c.method === 'sendMessage')?.body.text)).toMatch(/Pending: "New Community"/);
+
+    sent.length = 0;
+    await sendUpdate(setupCommand('/setup confirm'));
+    expect(String(sent.find((c) => c.method === 'sendMessage')?.body.text)).toMatch(/Done.*New Community/s);
+
+    expect(await env.KV.get('config:telegram_group_id')).toBe(String(NEW_GROUP_ID));
+    expect(await env.KV.get('pending:group_detect')).toBeNull();
+
+    const audit = await env.DB.prepare(
+      "SELECT action FROM admin_audit_log WHERE action = 'setup_group_confirmed'",
+    ).first<{ action: string }>();
+    expect(audit).toBeTruthy();
+  });
+
+  it('/setup confirm with nothing pending says so', async () => {
+    await sendUpdate(setupCommand('/setup confirm'));
+    expect(String(sent.find((c) => c.method === 'sendMessage')?.body.text)).toMatch(/Nothing pending/);
+  });
+
+  it('/setup group <id> pins a group directly after validating it exists', async () => {
+    RESULTS.getChat = { id: -100555, type: 'supergroup', title: 'Direct Pin Group' };
+    await sendUpdate(setupCommand('/setup group -100555'));
+
+    expect(String(sent.find((c) => c.method === 'sendMessage')?.body.text)).toMatch(/Direct Pin Group/);
+    expect(await env.KV.get('config:telegram_group_id')).toBe('-100555');
+  });
+
+  it('/setup group <id> refuses a non-group chat (e.g. a private chat id)', async () => {
+    RESULTS.getChat = { id: 12345, type: 'private' };
+    await sendUpdate(setupCommand('/setup group 12345'));
+    expect(String(sent.find((c) => c.method === 'sendMessage')?.body.text)).toMatch(/not a group or supergroup/);
+    expect(await env.KV.get('config:telegram_group_id')).toBeNull();
+  });
+
+  it('/setup group <id> reports a clear error when the bot cannot see that chat', async () => {
+    const originalFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes('/getChat')) {
+        return new Response(JSON.stringify({ ok: false, description: 'chat not found' }), { status: 400 });
+      }
+      return originalFetch(input, init);
+    });
+    try {
+      await sendUpdate(setupCommand('/setup group -100999999'));
+      expect(String(sent.find((c) => c.method === 'sendMessage')?.body.text)).toMatch(/Could not find that chat/);
+      expect(await env.KV.get('config:telegram_group_id')).toBeNull();
+    } finally {
+      vi.stubGlobal('fetch', originalFetch);
+    }
+  });
+
+  it('/setup is invisible to non-admins', async () => {
+    await sendUpdate(setupCommand('/setup', 555444));
     expect(String(sent.find((c) => c.method === 'sendMessage')?.body.text)).toBe('Unknown command.');
   });
 });

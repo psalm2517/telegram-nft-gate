@@ -35,10 +35,17 @@ Details in [`solana-verification.md`](solana-verification.md).
 ## 3. Set secrets
 
 ```bash
-for s in TELEGRAM_BOT_TOKEN TELEGRAM_GROUP_ID TELEGRAM_WEBHOOK_SECRET NFT_COLLECTION_ID ADMIN_TELEGRAM_IDS SESSION_SECRET; do pnpm exec wrangler secret put "$s"; done
+for s in TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET NFT_COLLECTION_ID ADMIN_TELEGRAM_IDS SESSION_SECRET; do pnpm exec wrangler secret put "$s"; done
 ```
 
-`HELIUS_API_KEY` is optional — set it the same way if you have one. Without it, ownership checks fall back to the public Solana RPC (no key needed, no SLA). See [`solana-verification.md`](solana-verification.md#ownership-queries).
+Two secrets are optional:
+
+- `HELIUS_API_KEY` — without it, ownership checks fall back to the public
+  Solana RPC (no key needed, no SLA). See
+  [`solana-verification.md`](solana-verification.md#ownership-queries).
+- `TELEGRAM_GROUP_ID` — without it, add the bot to your group after deploying
+  and confirm it conversationally via `/setup`; see
+  [`telegram-setup.md`](telegram-setup.md#5-choose-which-group-to-gate--by-messaging-the-bot).
 
 Generate the two random secrets (`SESSION_SECRET`, `TELEGRAM_WEBHOOK_SECRET`) with:
 

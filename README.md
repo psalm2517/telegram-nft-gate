@@ -97,12 +97,17 @@ Then run it:
 pnpm run db:migrate:local && pnpm run build:web && pnpm run dev
 ```
 
-Once deployed, this handles the Telegram-side wiring (group id, webhook
-registration) in one guided run instead of a string of `curl` commands:
+Once deployed, register the webhook — the one setup step that can't be done
+by messaging the bot, since it has no way to receive messages until this runs:
 
 ```bash
 TELEGRAM_BOT_TOKEN=<token> pnpm run setup:telegram https://<your-worker>.workers.dev
 ```
+
+After that, everything else — including which group to gate — is just
+messaging the bot. Add it to your group as admin; it detects that and DMs your
+admins to confirm via `/setup`. See
+[`docs/telegram-setup.md`](docs/telegram-setup.md).
 
 Full setup lives in [`docs/deployment.md`](docs/deployment.md), with Telegram
 specifics in [`docs/telegram-setup.md`](docs/telegram-setup.md).
@@ -135,7 +140,7 @@ specific collection or community is baked into the code. See
 | Secret | Purpose |
 | --- | --- |
 | `TELEGRAM_BOT_TOKEN` | Bot credential from @BotFather |
-| `TELEGRAM_GROUP_ID` | The gated group's chat id |
+| `TELEGRAM_GROUP_ID` | The gated group's chat id. Optional: leave unset and confirm it by messaging the bot (`/setup`) instead |
 | `TELEGRAM_WEBHOOK_SECRET` | Shared secret proving updates came from Telegram |
 | `NFT_COLLECTION_ID` | Canonical on-chain certified collection id |
 | `HELIUS_API_KEY` | DAS access — server-side only, never exposed. Optional: omit to use the public Solana RPC instead (see `DAS_ENDPOINT`) |
