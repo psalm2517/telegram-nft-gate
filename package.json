@@ -1,0 +1,57 @@
+{
+  "name": "telegram-nft-gate",
+  "version": "1.0.0",
+  "description": "Verify Solana NFT ownership and gate access to a private Telegram group. Collection-agnostic, runs on a single Cloudflare Worker.",
+  "license": "MIT",
+  "private": false,
+  "type": "module",
+  "packageManager": "pnpm@11.23.0",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "wrangler dev",
+    "dev:web": "vite --config web/vite.config.ts",
+    "build": "pnpm run build:web && pnpm run build:worker",
+    "build:web": "vite build --config web/vite.config.ts",
+    "build:worker": "wrangler deploy --dry-run --outdir=.wrangler/build",
+    "deploy": "pnpm run build:web && wrangler deploy",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p web/tsconfig.json && tsc --noEmit -p scripts/tsconfig.json",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local",
+    "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
+    "cf-typegen": "wrangler types",
+    "validate:collection": "node --experimental-transform-types scripts/validate-collection.ts"
+  },
+  "dependencies": {
+    "@noble/curves": "^2.4.0",
+    "@scure/base": "^2.4.0",
+    "grammy": "^1.46.0",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.1.3",
+    "@cloudflare/workers-types": "^5.20260901.1",
+    "@eslint/js": "^10.0.1",
+    "@solana/wallet-standard-features": "^1.4.0",
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
+    "@vitejs/plugin-react": "^6.1.1",
+    "@wallet-standard/app": "^1.1.1",
+    "@wallet-standard/base": "^1.1.1",
+    "eslint": "^10.9.1",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.12.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.69.0",
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11",
+    "wrangler": "^4.128.0"
+  }
+}

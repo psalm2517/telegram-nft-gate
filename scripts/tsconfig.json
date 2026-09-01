@@ -1,0 +1,11 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    // These scripts run under Node's native TypeScript stripping, which resolves
+    // relative imports by their real `.ts` path rather than rewriting `.js`.
+    "allowImportingTsExtensions": true,
+    "types": ["node"],
+    "lib": ["ES2023"]
+  },
+  "include": ["**/*.ts", "../src/services/ownership.ts"]
+}
