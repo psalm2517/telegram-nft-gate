@@ -46,8 +46,17 @@ Generate the two random secrets (`SESSION_SECRET`, `TELEGRAM_WEBHOOK_SECRET`) wi
 openssl rand -base64 32
 ```
 
-Non-secret behaviour (`MIGRATION_MODE`, `ACCESS_GRACE_PERIOD_HOURS`, …) lives in
-the `vars` block of `wrangler.jsonc`.
+Non-secret behaviour (`MIGRATION_MODE`, `ACCESS_GRACE_PERIOD_HOURS`,
+`CHALLENGE_TTL_SECONDS`, `RECHECK_BATCH_SIZE`, `RECHECK_INTERVAL_HOURS`,
+`APP_NAME`) is also set in the dashboard's "Variables and secrets" screen,
+alongside the secrets above — as plain `Text` values, not `Secret`. Every one
+has a safe fallback if you leave it unset (see `src/env.ts`).
+
+`wrangler.jsonc` deliberately does **not** declare a `vars` block. Cloudflare's
+Git-integration deploys treat that file as authoritative for anything listed
+there, so a checked-in default would silently overwrite whatever you configure
+in the dashboard on every push
+([cloudflare/workers-sdk#8871](https://github.com/cloudflare/workers-sdk/issues/8871)).
 
 > Never commit secrets. `.dev.vars` and `.env` are gitignored; keep it that way.
 

@@ -35,14 +35,18 @@
   ],
 
   // Scheduled ownership re-checks. Adjust to taste; hourly is a sane default.
-  "triggers": { "crons": ["0 * * * *"] },
+  "triggers": { "crons": ["0 * * * *"] }
 
-  "vars": {
-    "APP_NAME": "telegram-nft-gate",
-    "ACCESS_GRACE_PERIOD_HOURS": "24",
-    "MIGRATION_MODE": "true",
-    "CHALLENGE_TTL_SECONDS": "300",
-    "RECHECK_BATCH_SIZE": "100",
-    "RECHECK_INTERVAL_HOURS": "12"
-  }
+  // Deliberately no "vars" block here. APP_NAME, ACCESS_GRACE_PERIOD_HOURS,
+  // MIGRATION_MODE, CHALLENGE_TTL_SECONDS, RECHECK_BATCH_SIZE and
+  // RECHECK_INTERVAL_HOURS are operator config, not application defaults, and
+  // Cloudflare's Git-integration deploys treat this file as authoritative for
+  // any var declared here — a value checked into wrangler.jsonc silently
+  // overwrites whatever is set in the dashboard's "Variables and secrets" UI
+  // on every deploy (cloudflare/workers-sdk#8871).
+  //
+  // Set these instead through:
+  //   - the Cloudflare dashboard, for a deployment connected to Git, or
+  //   - `.dev.vars` (copy from .env.example), for local `wrangler dev`.
+  // Every one of them has a safe fallback in src/env.ts if left unset.
 }

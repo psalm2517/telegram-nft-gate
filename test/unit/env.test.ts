@@ -36,3 +36,20 @@ describe('DAS endpoint resolution', () => {
     expect(() => loadConfig(baseEnv({ HELIUS_API_KEY: undefined }))).not.toThrow();
   });
 });
+
+describe('MIGRATION_MODE default', () => {
+  it('defaults to true (safe) when entirely unset', () => {
+    const config = loadConfig(baseEnv({ MIGRATION_MODE: undefined }));
+    expect(config.migrationMode).toBe(true);
+  });
+
+  it('still honours an explicit "false"', () => {
+    const config = loadConfig(baseEnv({ MIGRATION_MODE: 'false' }));
+    expect(config.migrationMode).toBe(false);
+  });
+
+  it('still honours an explicit "true"', () => {
+    const config = loadConfig(baseEnv({ MIGRATION_MODE: 'true' }));
+    expect(config.migrationMode).toBe(true);
+  });
+});

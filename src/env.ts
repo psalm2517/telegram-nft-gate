@@ -30,11 +30,18 @@ export interface Env {
 
 const base58 = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
-/** Truthy env strings. Anything not explicitly true-ish is false. */
-const boolish = z
-  .string()
-  .optional()
-  .transform((v) => v?.trim().toLowerCase() === 'true');
+/**
+ * Truthy env string, with a default for when the var is absent entirely.
+ * An explicit "true"/"false" (any case) always wins over the default.
+ */
+const boolish = (defaultValue: boolean) =>
+  z
+    .string()
+    .optional()
+    .transform((v) => {
+      if (v === undefined || v.trim() === '') return defaultValue;
+      return v.trim().toLowerCase() === 'true';
+    });
 
 const intFromString = (fallback: number, min: number, max: number) =>
   z
@@ -110,7 +117,9 @@ export function loadConfig(env: Env): Config {
       .filter(Boolean),
     sessionSecret: env.SESSION_SECRET,
     gracePeriodHours: intFromString(24, 0, 24 * 365).parse(env.ACCESS_GRACE_PERIOD_HOURS),
-    migrationMode: boolish.parse(env.MIGRATION_MODE),
+    // Defaults to true — an unconfigured deployment must not silently start
+    // removing a community's existing members (CLAUDE.md §14).
+    migrationMode: boolish(true).parse(env.MIGRATION_MODE),
     challengeTtlSeconds: intFromString(300, 30, 3600).parse(env.CHALLENGE_TTL_SECONDS),
     recheckBatchSize: intFromString(100, 1, 1000).parse(env.RECHECK_BATCH_SIZE),
     recheckIntervalHours: intFromString(12, 1, 24 * 30).parse(env.RECHECK_INTERVAL_HOURS),
