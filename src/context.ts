@@ -31,9 +31,13 @@ export function createContext(env: Env, requestUrl?: string): AppContext {
     botToken: config.telegramBotToken,
     groupId: config.telegramGroupId,
   });
+  // config.dasEndpoint is always resolved by loadConfig (Helius if a key was
+  // given, otherwise the public Solana RPC), so it is passed explicitly here
+  // rather than relying on OwnershipChecker's own Helius-shaped default.
   const ownership = new OwnershipChecker({
-    apiKey: config.heliusApiKey,
+    apiKey: config.heliusApiKey ?? '',
     collectionId: config.nftCollectionId,
+    endpoint: config.dasEndpoint,
   });
   const access = new AccessService(db, telegram, ownership, config);
   const verification = new VerificationService(db, ownership, access, config);

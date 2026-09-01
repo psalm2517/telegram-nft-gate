@@ -20,7 +20,10 @@ export interface Env {
   TELEGRAM_GROUP_ID: string;
   TELEGRAM_WEBHOOK_SECRET?: string;
   NFT_COLLECTION_ID: string;
-  HELIUS_API_KEY: string;
+  /** Optional: omit to fall back to the public Solana RPC (see DAS_ENDPOINT). */
+  HELIUS_API_KEY?: string;
+  /** Optional: point ownership queries at any DAS-compatible RPC instead of Helius. */
+  DAS_ENDPOINT?: string;
   ADMIN_TELEGRAM_IDS: string;
   SESSION_SECRET: string;
 }
@@ -60,7 +63,8 @@ export const configSchema = z.object({
    * never discovered or mutated at runtime. Deliberately NOT collection-specific in name.
    */
   nftCollectionId: z.string().regex(base58, 'NFT_COLLECTION_ID must be a base58 Solana address'),
-  heliusApiKey: z.string().min(1, 'HELIUS_API_KEY is required'),
+  heliusApiKey: z.string().optional(),
+  dasEndpoint: z.string().url().optional(),
   adminTelegramIds: z.array(telegramId).min(1, 'ADMIN_TELEGRAM_IDS must list at least one id'),
   sessionSecret: z.string().min(16, 'SESSION_SECRET must be at least 16 characters'),
   gracePeriodHours: z.number().int().min(0).max(24 * 365),
@@ -71,7 +75,18 @@ export const configSchema = z.object({
   publicBaseUrl: z.string().url().optional(),
 });
 
-export type Config = z.infer<typeof configSchema>;
+export type Config = z.infer<typeof configSchema> & { dasEndpoint: string };
+
+/**
+ * Default DAS-compatible endpoint used when no HELIUS_API_KEY is configured.
+ *
+ * The public Solana RPC serves the same DAS methods (getAsset, searchAssets,
+ * getAssetsByGroup) as Helius. It carries no SLA or published rate limit, so
+ * it is a reasonable default for getting started or for low-volume gates, but
+ * a dedicated Helius key is recommended for anything running at scale — see
+ * docs/solana-verification.md.
+ */
+export const PUBLIC_SOLANA_RPC = 'https://api.mainnet-beta.solana.com';
 
 export class ConfigError extends Error {
   constructor(public readonly issues: string[]) {
@@ -87,7 +102,8 @@ export function loadConfig(env: Env): Config {
     telegramGroupId: env.TELEGRAM_GROUP_ID,
     telegramWebhookSecret: env.TELEGRAM_WEBHOOK_SECRET || undefined,
     nftCollectionId: env.NFT_COLLECTION_ID,
-    heliusApiKey: env.HELIUS_API_KEY,
+    heliusApiKey: env.HELIUS_API_KEY || undefined,
+    dasEndpoint: env.DAS_ENDPOINT || undefined,
     adminTelegramIds: (env.ADMIN_TELEGRAM_IDS ?? '')
       .split(',')
       .map((s) => s.trim())
@@ -106,5 +122,15 @@ export function loadConfig(env: Env): Config {
       parsed.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`),
     );
   }
-  return parsed.data;
+
+  // Neither HELIUS_API_KEY nor DAS_ENDPOINT is individually required, but the
+  // ownership checker needs *some* endpoint to query — default to the public
+  // Solana RPC rather than leaving this ambiguous.
+  const dasEndpoint =
+    parsed.data.dasEndpoint ??
+    (parsed.data.heliusApiKey
+      ? `https://mainnet.helius-rpc.com/?api-key=${parsed.data.heliusApiKey}`
+      : PUBLIC_SOLANA_RPC);
+
+  return { ...parsed.data, dasEndpoint };
 }

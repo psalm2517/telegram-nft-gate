@@ -35,10 +35,12 @@ Details in [`solana-verification.md`](solana-verification.md).
 ## 3. Set secrets
 
 ```bash
-for s in TELEGRAM_BOT_TOKEN TELEGRAM_GROUP_ID TELEGRAM_WEBHOOK_SECRET NFT_COLLECTION_ID HELIUS_API_KEY ADMIN_TELEGRAM_IDS SESSION_SECRET; do pnpm exec wrangler secret put "$s"; done
+for s in TELEGRAM_BOT_TOKEN TELEGRAM_GROUP_ID TELEGRAM_WEBHOOK_SECRET NFT_COLLECTION_ID ADMIN_TELEGRAM_IDS SESSION_SECRET; do pnpm exec wrangler secret put "$s"; done
 ```
 
-Generate the two random ones with:
+`HELIUS_API_KEY` is optional — set it the same way if you have one. Without it, ownership checks fall back to the public Solana RPC (no key needed, no SLA). See [`solana-verification.md`](solana-verification.md#ownership-queries).
+
+Generate the two random secrets (`SESSION_SECRET`, `TELEGRAM_WEBHOOK_SECRET`) with:
 
 ```bash
 openssl rand -base64 32

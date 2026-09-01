@@ -88,6 +88,13 @@ application: DAS presents both through the same `grouping` model and the same
 
 ## Ownership queries
 
+By default, queries go to the public Solana RPC
+(`https://api.mainnet-beta.solana.com`), which serves the same DAS methods as
+Helius — no API key required. Setting `HELIUS_API_KEY` switches to Helius's
+endpoint instead, which is recommended once the gate has real volume: the
+public RPC carries no SLA or published rate limit. `DAS_ENDPOINT` overrides
+either, for a self-hosted or third-party DAS-compatible RPC.
+
 ```json
 {
   "jsonrpc": "2.0",
