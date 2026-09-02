@@ -263,3 +263,44 @@ describe('OwnershipChecker.getCollectionName', () => {
     expect(await checker.getCollectionName()).toBeNull();
   });
 });
+
+describe('OwnershipChecker default fetchImpl (regression)', () => {
+  // Every test above overrides fetchImpl, so none of them exercised this
+  // path — which is exactly how a real bug slipped through: storing the bare
+  // global `fetch` and calling it as `this.fetchImpl(...)` throws "Illegal
+  // invocation" in Workers (wrong `this` receiver), silently turning every
+  // ownership check into INDETERMINATE regardless of which RPC was configured.
+  // This hits the real public Solana RPC to prove the default binding works
+  // end-to-end, not just that some fetch function was called.
+  it('does not throw "Illegal invocation" when using the real default fetch', async () => {
+    const errors: unknown[] = [];
+    const originalError = console.error;
+    console.error = (...args: unknown[]) => errors.push(args);
+    try {
+      const checker = new OwnershipChecker({
+        apiKey: '',
+        collectionId: TEST_COLLECTION,
+        endpoint: 'https://api.mainnet-beta.solana.com',
+        // fetchImpl deliberately omitted — exercises the real default.
+      });
+      const result = await checker.ownsAtLeastOne('11111111111111111111111111111111');
+
+      // The public RPC may itself reject a sandboxed test runner's IP (rate
+      // limiting, egress policy) — that is a legitimate http_xxx/rate_limited
+      // outcome, proof the fetch call itself went through. Only a thrown
+      // "Illegal invocation" (wrong `this` receiver on the bare global fetch)
+      // is the regression this test guards against, and that always shows up
+      // as 'network_error' with the exception text logged.
+      if (result.status === 'INDETERMINATE' && result.reason === 'network_error') {
+        for (const call of errors) {
+          expect(JSON.stringify(call)).not.toMatch(/Illegal invocation/);
+        }
+        throw new Error(
+          `Unexpected network_error against a real endpoint: ${JSON.stringify(errors)}`,
+        );
+      }
+    } finally {
+      console.error = originalError;
+    }
+  });
+});

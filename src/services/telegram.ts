@@ -24,7 +24,11 @@ export class TelegramClient {
   private readonly timeoutMs: number;
 
   constructor(private readonly options: TelegramClientOptions) {
-    this.fetchImpl = options.fetchImpl ?? fetch;
+    // Bound explicitly — see the identical fix/comment in services/ownership.ts.
+    // Storing the bare global `fetch` and calling it as `this.fetchImpl(...)`
+    // throws "Illegal invocation" in Workers, since that call syntax rebinds
+    // `this` away from globalThis.
+    this.fetchImpl = options.fetchImpl ?? fetch.bind(globalThis);
     this.timeoutMs = options.timeoutMs ?? 10_000;
   }
 

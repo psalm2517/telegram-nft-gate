@@ -66,7 +66,11 @@ export class OwnershipChecker {
     this.endpoint =
       options.endpoint ?? `https://mainnet.helius-rpc.com/?api-key=${options.apiKey}`;
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-    this.fetchImpl = options.fetchImpl ?? fetch;
+    // Bound explicitly: storing the bare global `fetch` and later invoking it
+    // as `this.fetchImpl(...)` calls it with the wrong `this` receiver, which
+    // Workers' fetch rejects with "Illegal invocation" — this was silently
+    // turning every single ownership check into INDETERMINATE.
+    this.fetchImpl = options.fetchImpl ?? fetch.bind(globalThis);
   }
 
   /**
@@ -113,6 +117,12 @@ export class OwnershipChecker {
       });
     } catch (err) {
       const aborted = err instanceof Error && err.name === 'AbortError';
+      if (!aborted) {
+        console.error('ownership DAS fetch failed', {
+          endpoint: this.endpoint.replace(/api-key=[^&]+/, 'api-key=REDACTED'),
+          error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+        });
+      }
       return { status: 'INDETERMINATE', reason: aborted ? 'timeout' : 'network_error' };
     } finally {
       clearTimeout(timer);
@@ -234,7 +244,10 @@ export class OwnershipChecker {
    */
   async getCollectionName(): Promise<string | null> {
     const res = await this.getAsset(this.options.collectionId);
-    if (res.status !== 'ok') return null;
+    if (res.status !== 'ok') {
+      console.error('getCollectionName failed', { reason: res.reason });
+      return null;
+    }
     return res.asset.content?.metadata?.name ?? null;
   }
 
