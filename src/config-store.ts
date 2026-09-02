@@ -7,6 +7,8 @@
  * group via the env var.
  */
 const GROUP_ID_KEY = 'config:telegram_group_id';
+/** Human-readable name of the confirmed group, for user-facing bot text. */
+const GROUP_TITLE_KEY = 'config:telegram_group_title';
 
 /** A group the bot was just added to, awaiting an admin's /setup confirm. */
 const PENDING_GROUP_KEY = 'pending:group_detect';
@@ -21,8 +23,17 @@ export async function getConfiguredGroupId(kv: KVNamespace): Promise<string | nu
   return kv.get(GROUP_ID_KEY);
 }
 
-export async function setConfiguredGroupId(kv: KVNamespace, groupId: string): Promise<void> {
+export async function setConfiguredGroupId(
+  kv: KVNamespace,
+  groupId: string,
+  title?: string,
+): Promise<void> {
   await kv.put(GROUP_ID_KEY, groupId);
+  if (title) await kv.put(GROUP_TITLE_KEY, title);
+}
+
+export async function getConfiguredGroupTitle(kv: KVNamespace): Promise<string | null> {
+  return kv.get(GROUP_TITLE_KEY);
 }
 
 export async function getPendingGroup(kv: KVNamespace): Promise<PendingGroup | null> {

@@ -83,7 +83,7 @@ describe('bot commands over the real webhook', () => {
     expect(res.status).toBe(200);
 
     const reply = sent.find((c) => c.method === 'sendMessage');
-    expect(reply?.body.text).toMatch(/Welcome to test-gate/);
+    expect(reply?.body.text).toMatch(/prove you control a Solana wallet/i);
     // The message must read as separate lines, not one run-on paragraph.
     expect(String(reply?.body.text)).toContain('\n');
 

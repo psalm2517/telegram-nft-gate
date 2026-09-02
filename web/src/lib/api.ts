@@ -52,6 +52,8 @@ export const api = {
 
 export interface PublicConfig {
   appName: string;
+  /** The actual Telegram group's name, or null until an admin has confirmed one. */
+  groupTitle: string | null;
   collectionId: string;
   gracePeriodHours: number;
   migrationMode: boolean;

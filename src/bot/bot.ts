@@ -3,6 +3,7 @@ import type { UserFromGetMe } from 'grammy/types';
 import {
   clearPendingGroup,
   getConfiguredGroupId,
+  getConfiguredGroupTitle,
   getPendingGroup,
   setConfiguredGroupId,
   setPendingGroup,
@@ -62,6 +63,30 @@ const ADMIN_HELP_TEXT = [
   'holds a qualifying NFT. Every action here is written to the audit log.',
 ].join('\n');
 
+/**
+ * Real Telegram command definitions, distinct from the free-text HELP_TEXT
+ * above — these are what populate the "/" autocomplete menu in a client.
+ * Admin commands are registered only in the scope of an admin's own private
+ * chat (see registerAdminCommandMenu below), never bot-wide, so a non-admin's
+ * menu never lists them.
+ */
+const PUBLIC_COMMANDS = [
+  { command: 'start', description: 'Get started and verify' },
+  { command: 'verify', description: 'Connect a wallet and prove NFT ownership' },
+  { command: 'status', description: 'Check your verification and access status' },
+  { command: 'help', description: 'Show available commands' },
+];
+
+const ADMIN_COMMANDS = [
+  { command: 'setup', description: 'Check or configure the gated group' },
+  { command: 'adminhelp', description: 'List admin commands' },
+  { command: 'adminstats', description: 'Membership counts and migration progress' },
+  { command: 'adminusers', description: 'Search users by id, username, or wallet' },
+  { command: 'adminrecheck', description: 'Run a live ownership check on one user' },
+  { command: 'adminrevoke', description: "Remove a user's access" },
+  { command: 'adminrestore', description: 'Restore access after re-confirming ownership' },
+];
+
 const shortWallet = (address: string) => `${address.slice(0, 4)}…${address.slice(-4)}`;
 
 function formatUserLine(u: UserRow): string {
@@ -86,6 +111,24 @@ export function createBot(deps: BotDeps, botInfo?: UserFromGetMe): Bot {
   };
 
   /**
+   * Registers Telegram's native "/" command menu for one admin's private chat
+   * with the bot — scoped there only, so this is invisible to everyone else.
+   * Without this, admin commands work but are effectively undiscoverable: an
+   * admin has to already know to type e.g. /adminhelp. Fires once per admin
+   * (cached in KV) rather than on every message.
+   */
+  async function ensureAdminCommandMenu(ctx: Context, telegramUserId: string): Promise<void> {
+    const flagKey = `admin-menu-set:${telegramUserId}`;
+    if (await deps.kv.get(flagKey)) return;
+    await ctx.api
+      .setMyCommands([...PUBLIC_COMMANDS, ...ADMIN_COMMANDS], {
+        scope: { type: 'chat', chat_id: Number(telegramUserId) },
+      })
+      .catch(() => {});
+    await deps.kv.put(flagKey, '1', { expirationTtl: 30 * 24 * 60 * 60 });
+  }
+
+  /**
    * Gate an admin command. Rejections are a generic "Unknown command" rather
    * than "you are not an admin", so a non-admin probing command names cannot
    * distinguish "does not exist" from "exists but you're not authorized".
@@ -99,33 +142,40 @@ export function createBot(deps: BotDeps, botInfo?: UserFromGetMe): Bot {
     return String(from.id);
   };
 
-  bot.command('start', async (ctx) => {
-    if (!(await privateOnly(ctx))) return;
-    const from = ctx.from;
-    if (!from) return;
-    await deps.db.upsertUser(String(from.id), from.username ?? null);
-    await ctx.reply(
-      [
-        `Welcome to ${deps.config.appName}.`,
-        '',
-        'This group is gated by on-chain NFT ownership. To join, prove you control',
-        'a Solana wallet holding a qualifying NFT from the configured collection.',
-        '',
-        'Use /verify to begin, or /help to see all commands.',
-      ].join('\n'),
-    );
-  });
-
-  bot.command('help', async (ctx) => {
-    if (!(await privateOnly(ctx))) return;
-    await ctx.reply(HELP_TEXT);
-  });
-
-  bot.command('verify', async (ctx) => {
-    if (!(await privateOnly(ctx))) return;
+  /**
+   * Issue a fresh verify link and reply with it as a button. Shared by /start
+   * (the button is on the very first message, not a separate command you have
+   * to know to type) and /verify (kept as an explicit fallback).
+   *
+   * If no group has been confirmed yet (see /setup), there is nothing to
+   * grant access to, so this refuses instead of handing out a link that leads
+   * nowhere — with a different message for admins (who can fix it) than for
+   * everyone else (who just needs to wait).
+   */
+  async function replyWithVerifyLink(ctx: Context, isStart: boolean): Promise<void> {
     const from = ctx.from;
     if (!from) return;
     const telegramUserId = String(from.id);
+
+    // Already fully resolved by context.ts: KV confirmation if present,
+    // else the env var fallback, else ''.
+    const configuredId = deps.config.telegramGroupId;
+    if (!configuredId) {
+      if (isAdmin(telegramUserId)) {
+        await ctx.reply(
+          [
+            `${deps.config.appName} isn't fully set up yet — no group is configured.`,
+            '',
+            'Add me to your group as admin (Invite Users via Link, Ban Users),',
+            "then reply /setup confirm here once I've messaged you. Run /setup",
+            'any time to check status.',
+          ].join('\n'),
+        );
+      } else {
+        await ctx.reply(`${deps.config.appName} isn't ready yet. Please check back soon.`);
+      }
+      return;
+    }
 
     const limit = await deps.rateLimiter.check(`verify:${telegramUserId}`, 5, 300);
     if (!limit.allowed) {
@@ -143,22 +193,55 @@ export function createBot(deps: BotDeps, botInfo?: UserFromGetMe): Bot {
       VERIFY_LINK_TTL_SECONDS,
     );
     const url = `${deps.baseUrl}/verify#token=${token}`;
+    const groupTitle = await getConfiguredGroupTitle(deps.kv);
 
-    await ctx.reply(
-      [
-        'Open the link below to connect your wallet and sign a verification message.',
+    const lines: string[] = [];
+    if (isStart) {
+      lines.push(
+        groupTitle
+          ? `To join "${groupTitle}", prove you control a Solana wallet holding a qualifying NFT.`
+          : 'Prove you control a Solana wallet holding a qualifying NFT.',
         '',
-        `This link is personal to you and expires in ${VERIFY_LINK_TTL_SECONDS / 60} minutes.`,
-        'Do not share it.',
-        '',
-        'You will be asked to sign a message. This is not a transaction and moves no funds.',
-      ].join('\n'),
-      {
-        reply_markup: {
-          inline_keyboard: [[{ text: 'Verify wallet', url }]],
-        },
-      },
+      );
+    }
+    lines.push(
+      `Tap below to connect your wallet and sign a verification message.`,
+      `The link is personal to you and expires in ${VERIFY_LINK_TTL_SECONDS / 60} minutes. Do not share it.`,
+      '',
+      'You will be asked to sign a message. This is not a transaction and moves no funds.',
     );
+
+    await ctx.reply(lines.join('\n'), {
+      reply_markup: { inline_keyboard: [[{ text: 'Verify wallet', url }]] },
+    });
+  }
+
+  // Runs before every command handler below. Cheap after the first message
+  // (KV-cached), so this is fine as unconditional middleware rather than
+  // something bolted onto just /start.
+  bot.use(async (ctx, next) => {
+    const from = ctx.from;
+    if (from && ctx.chat?.type === 'private' && isAdmin(String(from.id))) {
+      await ensureAdminCommandMenu(ctx, String(from.id));
+    }
+    await next();
+  });
+
+  bot.command('start', async (ctx) => {
+    if (!(await privateOnly(ctx))) return;
+    await replyWithVerifyLink(ctx, true);
+  });
+
+  bot.command('help', async (ctx) => {
+    if (!(await privateOnly(ctx))) return;
+    const from = ctx.from;
+    const admin = from && isAdmin(String(from.id));
+    await ctx.reply(admin ? `${HELP_TEXT}\n\nYou are an admin — send /adminhelp for admin commands.` : HELP_TEXT);
+  });
+
+  bot.command('verify', async (ctx) => {
+    if (!(await privateOnly(ctx))) return;
+    await replyWithVerifyLink(ctx, false);
   });
 
   bot.command('status', async (ctx) => {
@@ -270,7 +353,7 @@ export function createBot(deps: BotDeps, botInfo?: UserFromGetMe): Bot {
         );
         return;
       }
-      await setConfiguredGroupId(deps.kv, pending.id);
+      await setConfiguredGroupId(deps.kv, pending.id, pending.title);
       await clearPendingGroup(deps.kv);
       await deps.db.recordAdminAction({
         adminTelegramId: adminId,
@@ -298,7 +381,7 @@ export function createBot(deps: BotDeps, botInfo?: UserFromGetMe): Bot {
         await ctx.reply('That chat is not a group or supergroup.');
         return;
       }
-      await setConfiguredGroupId(deps.kv, targetId);
+      await setConfiguredGroupId(deps.kv, targetId, chat.value.title);
       await clearPendingGroup(deps.kv);
       await deps.db.recordAdminAction({
         adminTelegramId: adminId,

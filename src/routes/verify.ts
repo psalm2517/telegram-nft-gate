@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { getConfiguredGroupTitle } from '../config-store.js';
 import type { AppContext } from '../context.js';
 import { badRequest, tooManyRequests, unauthorized } from '../lib/errors.js';
 import { clientIp, json, readJson } from '../lib/http.js';
@@ -99,9 +100,13 @@ export async function handleSubmit(request: Request, ctx: AppContext): Promise<R
 }
 
 /** Public, non-sensitive config the frontend needs to render itself. */
-export function handlePublicConfig(ctx: AppContext): Response {
+export async function handlePublicConfig(ctx: AppContext): Promise<Response> {
   return json({
     appName: ctx.config.appName,
+    // The actual Telegram group's name, so the web page can say "join <group>"
+    // instead of generic "the private Telegram group" phrasing. null until an
+    // admin has confirmed a group via /setup.
+    groupTitle: await getConfiguredGroupTitle(ctx.env.KV),
     // The collection id is public on-chain data; the Helius API key is not and
     // never leaves the Worker.
     collectionId: ctx.config.nftCollectionId,

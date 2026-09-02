@@ -7,6 +7,7 @@ import {
   type ChallengeResponse,
   type PublicConfig,
 } from './lib/api';
+import { fallbackUrlFor, isMobileBrowser, KNOWN_WALLETS } from './lib/knownWallets';
 import {
   connectWallet,
   listCompatibleWallets,
@@ -116,12 +117,15 @@ export function Verify() {
     );
   }
 
+  const heading = config?.groupTitle ?? config?.appName ?? 'NFT Gate';
+  const bodyText = config?.groupTitle
+    ? `Prove you control a wallet holding a qualifying NFT to join "${config.groupTitle}".`
+    : 'Prove you control a wallet holding a qualifying NFT to unlock access.';
+
   return (
     <div className="wrap">
-      <h1>{config?.appName ?? 'NFT Gate'}</h1>
-      <p className="muted">
-        Prove you control a wallet holding a qualifying NFT to unlock the private Telegram group.
-      </p>
+      <h1>{heading}</h1>
+      <p className="muted">{bodyText}</p>
 
       <div className="card">
         <ul className="steps">
@@ -140,14 +144,51 @@ export function Verify() {
       {step === 'connect' && (
         <div className="card">
           <h2 style={{ marginTop: 0 }}>Choose a wallet</h2>
-          {wallets.length === 0 ? (
-            <p className="muted">
-              No Solana Wallet Standard wallet detected. Install or unlock a wallet extension
-              (Phantom, Solflare, Backpack, …) and this list will update automatically.
-            </p>
-          ) : (
-            <div className="wallet-list">
-              {wallets.map((w) => (
+          <div className="wallet-list">
+            {KNOWN_WALLETS.map((known) => {
+              const detected = wallets.find(
+                (w) => w.name.toLowerCase() === known.name.toLowerCase(),
+              );
+              if (detected) {
+                return (
+                  <button
+                    key={known.name}
+                    className="wallet-btn"
+                    disabled={busy}
+                    onClick={() => void handleConnect(detected)}
+                  >
+                    {detected.icon ? (
+                      <img src={detected.icon} alt="" />
+                    ) : (
+                      <span className="wallet-badge" style={{ background: known.color }}>
+                        {known.badge}
+                      </span>
+                    )}
+                    <span>{known.name}</span>
+                  </button>
+                );
+              }
+              return (
+                <a
+                  key={known.name}
+                  className="wallet-btn wallet-btn-fallback"
+                  href={fallbackUrlFor(known)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <span className="wallet-badge" style={{ background: known.color }}>
+                    {known.badge}
+                  </span>
+                  <span>{known.name}</span>
+                  <span className="muted wallet-btn-hint">
+                    {isMobileBrowser() ? 'Open in app' : 'Install'}
+                  </span>
+                </a>
+              );
+            })}
+            {wallets
+              .filter((w) => !KNOWN_WALLETS.some((k) => k.name.toLowerCase() === w.name.toLowerCase()))
+              .map((w) => (
                 <button
                   key={w.name}
                   className="wallet-btn"
@@ -158,8 +199,11 @@ export function Verify() {
                   <span>{w.name}</span>
                 </button>
               ))}
-            </div>
-          )}
+          </div>
+          <p className="muted" style={{ marginTop: 12, marginBottom: 0 }}>
+            Already have a wallet installed but don't see it? It'll appear above automatically
+            once detected.
+          </p>
         </div>
       )}
 

@@ -57,8 +57,17 @@ button.small { padding: 5px 10px; font-size: 13px; }
   display: flex; align-items: center; gap: 10px;
   background: var(--panel-2); color: var(--text);
   border: 1px solid var(--border); text-align: left; width: 100%;
+  font: inherit; border-radius: 8px; padding: 10px 16px;
+  cursor: pointer; text-decoration: none; box-sizing: border-box;
 }
 .wallet-btn img { width: 22px; height: 22px; border-radius: 5px; }
+.wallet-badge {
+  width: 22px; height: 22px; border-radius: 5px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; flex: 0 0 22px;
+}
+.wallet-btn-fallback { opacity: 0.9; }
+.wallet-btn-hint { margin-left: auto; font-size: 12px; }
 
 .notice { border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; font-size: 14px; }
 .notice.err { background: rgba(229,106,106,0.12); border: 1px solid rgba(229,106,106,0.35); }

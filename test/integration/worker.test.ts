@@ -31,6 +31,21 @@ describe('worker routing', () => {
     expect(body).not.toHaveProperty('heliusApiKey');
   });
 
+  it('public config reports groupTitle as null before any group is confirmed', async () => {
+    await env.KV.delete('config:telegram_group_title');
+    const res = await SELF.fetch('https://gate.example/api/config');
+    const body = (await res.json()) as { groupTitle: unknown };
+    expect(body.groupTitle).toBeNull();
+  });
+
+  it('public config reports the confirmed group title once set', async () => {
+    await env.KV.put('config:telegram_group_title', 'SBF Cabal');
+    const res = await SELF.fetch('https://gate.example/api/config');
+    const body = (await res.json()) as { groupTitle: unknown };
+    expect(body.groupTitle).toBe('SBF Cabal');
+    await env.KV.delete('config:telegram_group_title');
+  });
+
   it('sets hardening headers on API responses', async () => {
     const res = await SELF.fetch('https://gate.example/api/health');
     expect(res.headers.get('x-content-type-options')).toBe('nosniff');

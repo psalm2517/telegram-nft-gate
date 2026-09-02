@@ -38,7 +38,7 @@ async function route(request: Request, ctx: AppContext): Promise<Response | null
   // --- verification -----------------------------------------------------------
   // Administration lives entirely in Telegram bot commands (see src/bot/bot.ts),
   // not in a separate web surface — there is no /api/admin/*.
-  if (parts[1] === 'config' && method === 'GET') return handlePublicConfig(ctx);
+  if (parts[1] === 'config' && method === 'GET') return await handlePublicConfig(ctx);
   if (parts[1] === 'verify' && parts[2] === 'challenge' && method === 'POST') {
     return handleChallenge(request, ctx);
   }
