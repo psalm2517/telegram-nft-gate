@@ -7,6 +7,10 @@ collection, and the bot grants them access. Ownership is re-checked on a
 schedule; if it lapses, the member gets a grace period, a warning, and a chance
 to re-verify before access is removed.
 
+Optionally, run it with two groups: a public **gate** group anyone can join
+(the bot posts a Verify button there), and the private **main** group that's
+actually protected. Or skip the gate group and just tell people to DM the bot.
+
 The whole system is a **single Cloudflare Worker** that serves the React
 verification page, the verification API, and the Telegram webhook.
 Administration — stats, search, revoke, restore, recheck — is a handful of
@@ -140,7 +144,8 @@ specific collection or community is baked into the code. See
 | Secret | Purpose |
 | --- | --- |
 | `TELEGRAM_BOT_TOKEN` | Bot credential from @BotFather |
-| `TELEGRAM_GROUP_ID` | The gated group's chat id. Optional: leave unset and confirm it by messaging the bot (`/setup`) instead |
+| `TELEGRAM_GROUP_ID` | The private main group's chat id. Optional: leave unset and confirm it via `/setup main confirm` instead |
+| `GATE_GROUP_ID` | The public lobby group's chat id, if you use one. Optional in every sense — confirm via `/setup gate confirm`, or skip entirely |
 | `TELEGRAM_WEBHOOK_SECRET` | Shared secret proving updates came from Telegram |
 | `NFT_COLLECTION_ID` | Canonical on-chain certified collection id |
 | `HELIUS_API_KEY` | DAS access — server-side only, never exposed. Optional: omit to use the public Solana RPC instead (see `DAS_ENDPOINT`) |
@@ -155,6 +160,7 @@ specific collection or community is baked into the code. See
 | `RECHECK_INTERVAL_HOURS` | `12` | How stale a check may get before re-running |
 | `RECHECK_BATCH_SIZE` | `100` | Users re-checked per cron invocation |
 | `PUBLIC_BASE_URL` | inferred | Origin used in generated links |
+| `COLLECTION_NAME` | generic phrasing | Friendly collection name in bot text, e.g. "Solana Business Frogs" |
 
 ---
 

@@ -51,7 +51,7 @@ const HELP_TEXT = [
 const ADMIN_HELP_TEXT = [
   'Admin commands:',
   '',
-  '/setup — check or configure which group this bot gates',
+  '/setup — check or configure the gate and main groups',
   '/adminstats — membership counts and migration progress',
   '/adminusers <query> — search by Telegram id, username or wallet',
   '/adminrecheck <telegram_id> — run a live ownership check on one user',
@@ -99,30 +99,12 @@ export function createBot(deps: BotDeps, botInfo?: UserFromGetMe): Bot {
     return String(from.id);
   };
 
-  bot.command('start', async (ctx) => {
-    if (!(await privateOnly(ctx))) return;
-    const from = ctx.from;
-    if (!from) return;
-    await deps.db.upsertUser(String(from.id), from.username ?? null);
-    await ctx.reply(
-      [
-        `Welcome to ${deps.config.appName}.`,
-        '',
-        'This group is gated by on-chain NFT ownership. To join, prove you control',
-        'a Solana wallet holding a qualifying NFT from the configured collection.',
-        '',
-        'Use /verify to begin, or /help to see all commands.',
-      ].join('\n'),
-    );
-  });
-
-  bot.command('help', async (ctx) => {
-    if (!(await privateOnly(ctx))) return;
-    await ctx.reply(HELP_TEXT);
-  });
-
-  bot.command('verify', async (ctx) => {
-    if (!(await privateOnly(ctx))) return;
+  /**
+   * Issue a fresh verify link and reply with it as a button. Shared by /start
+   * (so the button is on the very first message, not a separate command you
+   * have to know to type) and /verify (kept as an explicit fallback).
+   */
+  async function replyWithVerifyLink(ctx: Context, extraText?: string): Promise<void> {
     const from = ctx.from;
     if (!from) return;
     const telegramUserId = String(from.id);
@@ -143,22 +125,40 @@ export function createBot(deps: BotDeps, botInfo?: UserFromGetMe): Bot {
       VERIFY_LINK_TTL_SECONDS,
     );
     const url = `${deps.baseUrl}/verify#token=${token}`;
+    const collection = deps.config.collectionName ?? 'a qualifying NFT';
 
-    await ctx.reply(
-      [
-        'Open the link below to connect your wallet and sign a verification message.',
-        '',
-        `This link is personal to you and expires in ${VERIFY_LINK_TTL_SECONDS / 60} minutes.`,
-        'Do not share it.',
-        '',
-        'You will be asked to sign a message. This is not a transaction and moves no funds.',
-      ].join('\n'),
-      {
-        reply_markup: {
-          inline_keyboard: [[{ text: 'Verify wallet', url }]],
-        },
-      },
+    const lines = extraText ? [extraText, ''] : [];
+    lines.push(
+      `Tap below to connect a Solana wallet and prove you hold ${collection}.`,
+      `The link is personal to you and expires in ${VERIFY_LINK_TTL_SECONDS / 60} minutes. Do not share it.`,
+      '',
+      'You will be asked to sign a message. This is not a transaction and moves no funds.',
     );
+
+    await ctx.reply(lines.join('\n'), {
+      reply_markup: { inline_keyboard: [[{ text: 'Verify wallet', url }]] },
+    });
+  }
+
+  bot.command('start', async (ctx) => {
+    if (!(await privateOnly(ctx))) return;
+    const collection = deps.config.collectionName
+      ? `holding ${deps.config.collectionName}`
+      : 'holding a qualifying NFT';
+    await replyWithVerifyLink(
+      ctx,
+      `Welcome to ${deps.config.appName}. This group is gated to Solana wallets ${collection}.`,
+    );
+  });
+
+  bot.command('help', async (ctx) => {
+    if (!(await privateOnly(ctx))) return;
+    await ctx.reply(HELP_TEXT);
+  });
+
+  bot.command('verify', async (ctx) => {
+    if (!(await privateOnly(ctx))) return;
+    await replyWithVerifyLink(ctx);
   });
 
   bot.command('status', async (ctx) => {
@@ -224,32 +224,39 @@ export function createBot(deps: BotDeps, botInfo?: UserFromGetMe): Bot {
    * This is what replaces pre-deploy TELEGRAM_GROUP_ID discovery: add the bot
    * to a group and talk to it from here, nothing else required.
    */
+  const ROLE_LABEL: Record<'main' | 'gate', string> = {
+    main: 'main (private, granted after verification)',
+    gate: 'gate (public lobby people join before verifying)',
+  };
+
   bot.command('setup', async (ctx) => {
     const adminId = await requireAdmin(ctx);
     if (!adminId) return;
 
-    const [subcommand, ...rest] = ctx.match.toString().trim().split(/\s+/);
-    const configuredId = await getConfiguredGroupId(deps.kv);
+    const [first, second, ...rest] = ctx.match.toString().trim().split(/\s+/).filter(Boolean);
 
-    if (!subcommand) {
-      const pending = await getPendingGroup(deps.kv);
+    if (!first) {
+      const [mainId, gateId, pending] = await Promise.all([
+        getConfiguredGroupId(deps.kv, 'main'),
+        getConfiguredGroupId(deps.kv, 'gate'),
+        getPendingGroup(deps.kv),
+      ]);
       const lines = [
-        configuredId
-          ? `Configured group: ${configuredId}`
-          : 'No group configured yet.',
+        `Main group: ${mainId ?? 'not configured yet'}`,
+        `Gate group: ${gateId ?? 'not configured yet'}`,
       ];
-      if (pending && pending.id !== configuredId) {
+      if (pending && pending.id !== mainId && pending.id !== gateId) {
         lines.push(
           '',
           `Pending: "${pending.title}" (${pending.id}) — detected when I was added to it.`,
-          'Run /setup confirm to use this group, or ignore this if it was unexpected.',
+          'Run /setup main confirm or /setup gate confirm to assign it, or ignore if unexpected.',
         );
-      } else if (!configuredId) {
+      }
+      if (!mainId || !gateId) {
         lines.push(
           '',
-          'Add me to your group as admin (Invite Users via Link, Ban Users), then',
-          "I'll message you here to confirm. Or run /setup group <id> if you",
-          'already know the chat id.',
+          'Add me to a group as admin — I\'ll message you here to assign it, or run',
+          '/setup main group <id> / /setup gate group <id> directly.',
         );
       }
       lines.push(
@@ -262,29 +269,35 @@ export function createBot(deps: BotDeps, botInfo?: UserFromGetMe): Bot {
       return;
     }
 
-    if (subcommand === 'confirm') {
+    if (first !== 'main' && first !== 'gate') {
+      await ctx.reply('Usage: /setup, /setup main confirm, /setup gate confirm, /setup <main|gate> group <chat_id>');
+      return;
+    }
+    const role = first;
+
+    if (second === 'confirm') {
       const pending = await getPendingGroup(deps.kv);
       if (!pending) {
         await ctx.reply(
-          'Nothing pending. Add me to the group you want to gate first — I\'ll message you here once I am.',
+          "Nothing pending. Add me to the group first — I'll message you here once I am.",
         );
         return;
       }
-      await setConfiguredGroupId(deps.kv, pending.id);
+      await setConfiguredGroupId(deps.kv, role, pending.id);
       await clearPendingGroup(deps.kv);
       await deps.db.recordAdminAction({
         adminTelegramId: adminId,
         action: 'setup_group_confirmed',
-        details: { groupId: pending.id, title: pending.title },
+        details: { role, groupId: pending.id, title: pending.title },
       });
-      await ctx.reply(`Done. Now gating "${pending.title}" (${pending.id}).`);
+      await ctx.reply(`Done. "${pending.title}" (${pending.id}) is now the ${ROLE_LABEL[role]} group.`);
       return;
     }
 
-    if (subcommand === 'group') {
+    if (second === 'group') {
       const targetId = rest.join(' ').trim();
       if (!targetId) {
-        await ctx.reply('Usage: /setup group <chat_id>');
+        await ctx.reply(`Usage: /setup ${role} group <chat_id>`);
         return;
       }
       const chat = await deps.telegram.getChat(targetId);
@@ -298,18 +311,18 @@ export function createBot(deps: BotDeps, botInfo?: UserFromGetMe): Bot {
         await ctx.reply('That chat is not a group or supergroup.');
         return;
       }
-      await setConfiguredGroupId(deps.kv, targetId);
+      await setConfiguredGroupId(deps.kv, role, targetId);
       await clearPendingGroup(deps.kv);
       await deps.db.recordAdminAction({
         adminTelegramId: adminId,
         action: 'setup_group_pinned',
-        details: { groupId: targetId, title: chat.value.title ?? null },
+        details: { role, groupId: targetId, title: chat.value.title ?? null },
       });
-      await ctx.reply(`Done. Now gating "${chat.value.title ?? targetId}" (${targetId}).`);
+      await ctx.reply(`Done. "${chat.value.title ?? targetId}" (${targetId}) is now the ${ROLE_LABEL[role]} group.`);
       return;
     }
 
-    await ctx.reply('Usage: /setup, /setup confirm, or /setup group <chat_id>');
+    await ctx.reply(`Usage: /setup ${role} confirm, or /setup ${role} group <chat_id>`);
   });
 
   bot.command('adminhelp', async (ctx) => {
@@ -476,8 +489,9 @@ export function createBot(deps: BotDeps, botInfo?: UserFromGetMe): Bot {
   });
 
   /**
-   * Detect being added to a group and ask an admin to confirm it via /setup,
-   * rather than requiring TELEGRAM_GROUP_ID to be known before deploy.
+   * Detect being added to a group and ask an admin to assign it a role via
+   * /setup, rather than requiring TELEGRAM_GROUP_ID / GATE_GROUP_ID to be
+   * known before deploy.
    */
   bot.on('my_chat_member', async (ctx) => {
     const update = ctx.myChatMember;
@@ -489,15 +503,21 @@ export function createBot(deps: BotDeps, botInfo?: UserFromGetMe): Bot {
 
     const groupId = String(update.chat.id);
     const title = update.chat.title ?? groupId;
-    const configuredId = await getConfiguredGroupId(deps.kv);
-    if (configuredId === groupId) return; // already the confirmed group, nothing to do
+    const [mainId, gateId] = await Promise.all([
+      getConfiguredGroupId(deps.kv, 'main'),
+      getConfiguredGroupId(deps.kv, 'gate'),
+    ]);
+    if (groupId === mainId || groupId === gateId) return; // already assigned, nothing to do
 
     await setPendingGroup(deps.kv, { id: groupId, title, detectedAt: new Date().toISOString() });
 
     const text = [
       `I was just added to "${title}" (${groupId}).`,
       '',
-      'Reply here with /setup confirm to make this the gated group.',
+      'Is this your MAIN group (private, granted after verification) or your',
+      'GATE group (public, where people join before verifying)?',
+      '',
+      'Reply /setup main confirm or /setup gate confirm.',
       "If this wasn't you, remove me from that group and ignore this message.",
     ].join('\n');
     for (const admin of deps.config.adminTelegramIds) {
@@ -506,18 +526,24 @@ export function createBot(deps: BotDeps, botInfo?: UserFromGetMe): Bot {
   });
 
   /**
-   * Migration mode: record people who were already in the group before gating
-   * went live, so enforcement can skip them until MIGRATION_MODE is turned off.
+   * Membership events in the MAIN group: migration-mode flagging for people
+   * already there, and an audit trail of joins/leaves.
    */
   bot.on('chat_member', async (ctx) => {
     const update = ctx.chatMember;
-    if (String(update.chat.id) !== deps.config.telegramGroupId) return;
-    const joined = ['member', 'administrator', 'creator', 'restricted'].includes(
-      update.new_chat_member.status,
-    );
+    const chatId = String(update.chat.id);
     const user = update.new_chat_member.user;
     if (user.is_bot) return;
 
+    if (chatId === deps.config.gateGroupId) {
+      await handleGateGroupJoin(ctx, update);
+      return;
+    }
+    if (chatId !== deps.config.telegramGroupId) return;
+
+    const joined = ['member', 'administrator', 'creator', 'restricted'].includes(
+      update.new_chat_member.status,
+    );
     const telegramUserId = String(user.id);
     if (joined) {
       await deps.db.upsertUser(telegramUserId, user.username ?? null, {
@@ -538,6 +564,37 @@ export function createBot(deps: BotDeps, botInfo?: UserFromGetMe): Bot {
       });
     }
   });
+
+  /**
+   * The gate group is not access-controlled — the bot's only job there is to
+   * greet a new joiner with a "Verify" button. Clicking it opens a DM with the
+   * bot (Telegram's own deep-link mechanism), which is also how a bot is
+   * allowed to message someone who has never started a chat with it: the user
+   * initiates it by tapping the link.
+   */
+  async function handleGateGroupJoin(
+    ctx: Context,
+    update: NonNullable<Context['chatMember']>,
+  ): Promise<void> {
+    const joined = ['member', 'administrator', 'restricted'].includes(
+      update.new_chat_member.status,
+    );
+    if (!joined) return;
+    const wasAlreadyIn = ['member', 'administrator', 'creator', 'restricted'].includes(
+      update.old_chat_member.status,
+    );
+    if (wasAlreadyIn) return; // status changed (e.g. promoted), not a fresh join
+
+    const user = update.new_chat_member.user;
+    const name = user.username ? `@${user.username}` : user.first_name;
+    const deepLink = `https://t.me/${ctx.me.username}?start=verify`;
+
+    await deps.telegram.sendMessage(
+      deps.config.gateGroupId,
+      `Welcome, ${name}! Tap below to verify and get access to the main group.`,
+      { reply_markup: { inline_keyboard: [[{ text: 'Verify', url: deepLink }]] } },
+    );
+  }
 
   bot.catch((err) => {
     console.error('grammY error', { error: String(err.error) });

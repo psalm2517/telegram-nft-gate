@@ -8,6 +8,8 @@ export interface Env {
 
   // vars
   APP_NAME?: string;
+  /** Friendly collection name shown to users, e.g. "Solana Business Frogs". */
+  COLLECTION_NAME?: string;
   ACCESS_GRACE_PERIOD_HOURS?: string;
   MIGRATION_MODE?: string;
   CHALLENGE_TTL_SECONDS?: string;
@@ -17,8 +19,10 @@ export interface Env {
 
   // secrets
   TELEGRAM_BOT_TOKEN: string;
-  /** Optional: omit to confirm the group conversationally instead (see /confirmgroup). */
+  /** The private, invite-only group granted after verification. Optional: confirm via /setup instead. */
   TELEGRAM_GROUP_ID?: string;
+  /** The public lobby group people join before verifying. Optional: confirm via /setup instead. */
+  GATE_GROUP_ID?: string;
   TELEGRAM_WEBHOOK_SECRET?: string;
   NFT_COLLECTION_ID: string;
   /** Optional: omit to fall back to the public Solana RPC (see DAS_ENDPOINT). */
@@ -63,8 +67,13 @@ const telegramId = z.string().regex(/^-?\d{1,20}$/, 'must be a numeric Telegram 
 
 export const configSchema = z.object({
   appName: z.string().min(1).default('telegram-nft-gate'),
+  /** Friendly collection name for user-facing text. Falls back to generic phrasing if unset. */
+  collectionName: z.string().min(1).optional(),
   telegramBotToken: z.string().min(20, 'TELEGRAM_BOT_TOKEN is missing or malformed'),
+  /** The private, invite-only group granted after verification. */
   telegramGroupId: telegramId.optional(),
+  /** The public lobby group people join before verifying. */
+  gateGroupId: telegramId.optional(),
   telegramWebhookSecret: z.string().min(1).optional(),
   /**
    * The on-chain certified collection id. Operator-supplied and validated at setup;
@@ -83,14 +92,15 @@ export const configSchema = z.object({
   publicBaseUrl: z.string().url().optional(),
 });
 
-export type Config = Omit<z.infer<typeof configSchema>, 'telegramGroupId'> & {
+export type Config = Omit<z.infer<typeof configSchema>, 'telegramGroupId' | 'gateGroupId'> & {
   dasEndpoint: string;
   /**
-   * Always a string once loadConfig returns — '' when no group has been
-   * configured or confirmed yet. context.ts may still overwrite this with a
-   * value confirmed at runtime via KV; see createContext.
+   * Always strings once loadConfig returns — '' when a group has not been
+   * configured or confirmed yet. context.ts may overwrite either with a value
+   * confirmed at runtime via KV (/setup); see createContext.
    */
   telegramGroupId: string;
+  gateGroupId: string;
 };
 
 /**
@@ -114,8 +124,10 @@ export class ConfigError extends Error {
 export function loadConfig(env: Env): Config {
   const parsed = configSchema.safeParse({
     appName: env.APP_NAME || 'telegram-nft-gate',
+    collectionName: env.COLLECTION_NAME || undefined,
     telegramBotToken: env.TELEGRAM_BOT_TOKEN,
     telegramGroupId: env.TELEGRAM_GROUP_ID || undefined,
+    gateGroupId: env.GATE_GROUP_ID || undefined,
     telegramWebhookSecret: env.TELEGRAM_WEBHOOK_SECRET || undefined,
     nftCollectionId: env.NFT_COLLECTION_ID,
     heliusApiKey: env.HELIUS_API_KEY || undefined,
@@ -150,5 +162,10 @@ export function loadConfig(env: Env): Config {
       ? `https://mainnet.helius-rpc.com/?api-key=${parsed.data.heliusApiKey}`
       : PUBLIC_SOLANA_RPC);
 
-  return { ...parsed.data, dasEndpoint, telegramGroupId: parsed.data.telegramGroupId ?? '' };
+  return {
+    ...parsed.data,
+    dasEndpoint,
+    telegramGroupId: parsed.data.telegramGroupId ?? '',
+    gateGroupId: parsed.data.gateGroupId ?? '',
+  };
 }
