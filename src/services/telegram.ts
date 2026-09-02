@@ -17,11 +17,31 @@ export interface TelegramClientOptions {
   groupId: string;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
+  /**
+   * Called when Telegram reports the configured group was upgraded to a
+   * supergroup (a routine, unprompted event — happens automatically past a
+   * member-count threshold, or when certain admin features are first used).
+   * The chat id changes permanently when this happens. Wire this to persist
+   * the new id (e.g. to KV), or every group-scoped call keeps failing after
+   * the first migration even though this client self-heals for its own
+   * remaining lifetime.
+   */
+  onGroupMigrated?: (newChatId: string) => void | Promise<void>;
+}
+
+interface TelegramApiResponse<T> {
+  ok: boolean;
+  result?: T;
+  description?: string;
+  error_code?: number;
+  parameters?: { retry_after?: number; migrate_to_chat_id?: number };
 }
 
 export class TelegramClient {
   private readonly fetchImpl: typeof fetch;
   private readonly timeoutMs: number;
+  /** Mutable: updated in place when Telegram reports a group migration. */
+  private groupId: string;
 
   constructor(private readonly options: TelegramClientOptions) {
     // Bound explicitly — see the identical fix/comment in services/ownership.ts.
@@ -30,9 +50,14 @@ export class TelegramClient {
     // `this` away from globalThis.
     this.fetchImpl = options.fetchImpl ?? fetch.bind(globalThis);
     this.timeoutMs = options.timeoutMs ?? 10_000;
+    this.groupId = options.groupId;
   }
 
-  private async call<T>(method: string, payload: unknown): Promise<TelegramOutcome<T>> {
+  private async call<T>(
+    method: string,
+    payload: Record<string, unknown>,
+    retriedAfterMigration = false,
+  ): Promise<TelegramOutcome<T>> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
@@ -45,13 +70,24 @@ export class TelegramClient {
           signal: controller.signal,
         },
       );
-      const json = (await res.json().catch(() => null)) as
-        | { ok: boolean; result?: T; description?: string; error_code?: number;
-            parameters?: { retry_after?: number } }
-        | null;
+      const json = (await res.json().catch(() => null)) as TelegramApiResponse<T> | null;
 
       if (!json) return { ok: false, error: 'malformed_response', code: res.status };
       if (!json.ok) {
+        const migrateTo = json.parameters?.migrate_to_chat_id;
+        // Only follow the migration for a call that was actually scoped to
+        // *our* configured group — an unrelated failure (e.g. getChat on some
+        // other chat_id during /setup) must not overwrite it.
+        if (
+          migrateTo !== undefined &&
+          !retriedAfterMigration &&
+          payload.chat_id === this.groupId
+        ) {
+          const newChatId = String(migrateTo);
+          this.groupId = newChatId;
+          await this.options.onGroupMigrated?.(newChatId);
+          return this.call(method, { ...payload, chat_id: newChatId }, true);
+        }
         return {
           ok: false,
           error: json.description ?? 'telegram_error',
@@ -92,7 +128,7 @@ export class TelegramClient {
     expiresInSeconds = 3600,
   ): Promise<TelegramOutcome<{ invite_link: string }>> {
     return this.call('createChatInviteLink', {
-      chat_id: this.options.groupId,
+      chat_id: this.groupId,
       name: name.slice(0, 32),
       expire_date: Math.floor(Date.now() / 1000) + expiresInSeconds,
       member_limit: 1,
@@ -102,7 +138,7 @@ export class TelegramClient {
 
   async revokeInviteLink(inviteLink: string): Promise<TelegramOutcome<unknown>> {
     return this.call('revokeChatInviteLink', {
-      chat_id: this.options.groupId,
+      chat_id: this.groupId,
       invite_link: inviteLink,
     });
   }
@@ -110,7 +146,7 @@ export class TelegramClient {
   async getChatMember(
     userId: string,
   ): Promise<TelegramOutcome<{ status: string; user?: { id: number; username?: string } }>> {
-    return this.call('getChatMember', { chat_id: this.options.groupId, user_id: userId });
+    return this.call('getChatMember', { chat_id: this.groupId, user_id: userId });
   }
 
   /**
@@ -136,14 +172,14 @@ export class TelegramClient {
    */
   async removeMember(userId: string): Promise<TelegramOutcome<void>> {
     const banned = await this.call('banChatMember', {
-      chat_id: this.options.groupId,
+      chat_id: this.groupId,
       user_id: userId,
       revoke_messages: false,
     });
     if (!banned.ok) return banned as TelegramOutcome<void>;
 
     const unbanned = await this.call('unbanChatMember', {
-      chat_id: this.options.groupId,
+      chat_id: this.groupId,
       user_id: userId,
       only_if_banned: true,
     });

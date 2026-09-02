@@ -1,4 +1,4 @@
-import { getConfiguredGroupId } from './config-store.js';
+import { getConfiguredGroupId, setConfiguredGroupId } from './config-store.js';
 import { loadConfig, type Config, type Env } from './env.js';
 import { AccessService } from './services/access.js';
 import { Database } from './services/db.js';
@@ -38,6 +38,14 @@ export async function createContext(env: Env, requestUrl?: string): Promise<AppC
   const telegram = new TelegramClient({
     botToken: config.telegramBotToken,
     groupId: config.telegramGroupId,
+    // Telegram upgrades a group to a supergroup automatically (member-count
+    // threshold, or the first time certain admin features are used) and the
+    // chat id changes permanently when it does. Persist the new id so every
+    // future request uses it too, not just the rest of this one.
+    onGroupMigrated: async (newChatId) => {
+      config.telegramGroupId = newChatId;
+      await setConfiguredGroupId(env.KV, newChatId);
+    },
   });
   // config.dasEndpoint is always resolved by loadConfig (Helius if a key was
   // given, otherwise the public Solana RPC), so it is passed explicitly here
