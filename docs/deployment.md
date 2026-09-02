@@ -59,11 +59,15 @@ Non-secret behaviour (`MIGRATION_MODE`, `ACCESS_GRACE_PERIOD_HOURS`,
 alongside the secrets above — as plain `Text` values, not `Secret`. Every one
 has a safe fallback if you leave it unset (see `src/env.ts`).
 
-`wrangler.jsonc` deliberately does **not** declare a `vars` block. Cloudflare's
-Git-integration deploys treat that file as authoritative for anything listed
-there, so a checked-in default would silently overwrite whatever you configure
-in the dashboard on every push
-([cloudflare/workers-sdk#8871](https://github.com/cloudflare/workers-sdk/issues/8871)).
+`wrangler.jsonc` deliberately does **not** declare a `vars` block, and sets
+`"keep_vars": true`. Both matter: Wrangler's actual default is to treat the
+config file as authoritative for the Worker's *entire* var set on every
+deploy — anything set in the dashboard but not declared in the file gets
+silently **deleted**, not merely left alone. `keep_vars: true` is what turns
+that off, so dashboard-configured values survive every future deploy. Without
+it, an empty (or absent) `vars` block would wipe every var on the next
+`wrangler deploy` — which is exactly what happened once during this project's
+own setup, breaking the Worker until it was caught and fixed.
 
 > Never commit secrets. `.dev.vars` and `.env` are gitignored; keep it that way.
 
