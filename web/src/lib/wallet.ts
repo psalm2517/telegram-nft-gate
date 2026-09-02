@@ -58,11 +58,34 @@ export function onWalletsChanged(callback: () => void): () => void {
   };
 }
 
+/**
+ * How long to wait for the wallet's own approval popup before giving up.
+ *
+ * A real approval prompt is answered in seconds. This exists for the failure
+ * mode where the extension opens its popup anchored to the toolbar icon
+ * (easy to miss) and then the user never notices it — without this, connect()
+ * simply never resolves and the page looks permanently broken with no
+ * feedback at all.
+ */
+const CONNECT_TIMEOUT_MS = 45_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(message)), ms)),
+  ]);
+}
+
 export async function connectWallet(wallet: Wallet): Promise<ConnectedWallet> {
   const feature = wallet.features[CONNECT] as ConnectFeature | undefined;
   if (!feature) throw new Error(`${wallet.name} does not support connecting.`);
 
-  const { accounts } = await feature.connect();
+  const { accounts } = await withTimeout(
+    feature.connect(),
+    CONNECT_TIMEOUT_MS,
+    `${wallet.name} did not respond. Check for an approval popup — it sometimes opens ` +
+      `near your browser's extension icon rather than on this page — then try again.`,
+  );
   const account =
     accounts.find((a) => a.chains.includes(SOLANA_MAINNET)) ??
     accounts.find((a) => a.chains.some((c) => c.startsWith('solana:'))) ??

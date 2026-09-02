@@ -28,6 +28,7 @@ export function Verify() {
   const [connected, setConnected] = useState<ConnectedWallet | null>(null);
   const [step, setStep] = useState<Step>('connect');
   const [busy, setBusy] = useState(false);
+  const [connectingTo, setConnectingTo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -44,6 +45,7 @@ export function Verify() {
   const handleConnect = useCallback(async (wallet: Wallet) => {
     setError(null);
     setBusy(true);
+    setConnectingTo(wallet.name);
     try {
       const result = await connectWallet(wallet);
       setConnected(result);
@@ -52,6 +54,7 @@ export function Verify() {
       setError(err instanceof Error ? err.message : 'Could not connect to that wallet.');
     } finally {
       setBusy(false);
+      setConnectingTo(null);
     }
   }, []);
 
@@ -118,9 +121,10 @@ export function Verify() {
   }
 
   const heading = config?.groupTitle ?? config?.appName ?? 'NFT Gate';
+  const nftPhrase = config?.collectionName ? `an NFT from ${config.collectionName}` : 'a qualifying NFT';
   const bodyText = config?.groupTitle
-    ? `Prove you control a wallet holding a qualifying NFT to join "${config.groupTitle}".`
-    : 'Prove you control a wallet holding a qualifying NFT to unlock access.';
+    ? `Prove you control a wallet holding ${nftPhrase} to join "${config.groupTitle}".`
+    : `Prove you control a wallet holding ${nftPhrase} to unlock access.`;
 
   return (
     <div className="wrap">
@@ -140,6 +144,14 @@ export function Verify() {
 
       {error && <div className="notice err">{error}</div>}
       {success && <div className="notice ok">{success}</div>}
+
+      {connectingTo && (
+        <div className="notice warn">
+          Waiting on {connectingTo} — a popup should have opened. If you don't see it, check
+          your browser's extension icons (often top-right of the address bar); it can open there
+          instead of on this page.
+        </div>
+      )}
 
       {step === 'connect' && (
         <div className="card">
@@ -168,20 +180,27 @@ export function Verify() {
                   </button>
                 );
               }
+              // Mobile deep links (the wallet's universal "browse" link) need a
+              // same-tab, top-level navigation to reliably trigger the OS's
+              // app-link handoff. target="_blank" silently does nothing in
+              // several embedded webviews (notably Telegram's in-app browser),
+              // which is exactly the "I tapped it and nothing happened" bug.
+              // Desktop install links are unaffected either way, so they still
+              // open in a new tab to keep this page around.
+              const mobile = isMobileBrowser();
               return (
                 <a
                   key={known.name}
                   className="wallet-btn wallet-btn-fallback"
                   href={fallbackUrlFor(known)}
-                  target="_blank"
-                  rel="noreferrer"
+                  {...(mobile ? {} : { target: '_blank', rel: 'noreferrer' })}
                 >
                   <span className="wallet-badge" style={{ background: known.color }}>
                     {known.badge}
                   </span>
                   <span>{known.name}</span>
                   <span className="muted wallet-btn-hint">
-                    {isMobileBrowser() ? 'Open in app' : 'Install'}
+                    {mobile ? 'Open in app' : 'Install'}
                   </span>
                 </a>
               );
@@ -247,7 +266,8 @@ export function Verify() {
 
       {config && (
         <p className="muted mono" style={{ marginTop: 24 }}>
-          Collection: {config.collectionId}
+          Collection: {config.collectionName ? `${config.collectionName} — ` : ''}
+          {config.collectionId}
         </p>
       )}
     </div>

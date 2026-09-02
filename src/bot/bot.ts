@@ -1,5 +1,6 @@
 import { Bot, type Context } from 'grammy';
 import type { UserFromGetMe } from 'grammy/types';
+import { getCachedCollectionName } from '../collection-cache.js';
 import {
   clearPendingGroup,
   getConfiguredGroupId,
@@ -193,14 +194,18 @@ export function createBot(deps: BotDeps, botInfo?: UserFromGetMe): Bot {
       VERIFY_LINK_TTL_SECONDS,
     );
     const url = `${deps.baseUrl}/verify#token=${token}`;
-    const groupTitle = await getConfiguredGroupTitle(deps.kv);
+    const [groupTitle, collectionName] = await Promise.all([
+      getConfiguredGroupTitle(deps.kv),
+      getCachedCollectionName(deps.kv, deps.ownership, deps.config.nftCollectionId),
+    ]);
+    const nftPhrase = collectionName ? `an NFT from ${collectionName}` : 'a qualifying NFT';
 
     const lines: string[] = [];
     if (isStart) {
       lines.push(
         groupTitle
-          ? `To join "${groupTitle}", prove you control a Solana wallet holding a qualifying NFT.`
-          : 'Prove you control a Solana wallet holding a qualifying NFT.',
+          ? `To join "${groupTitle}", prove you control a Solana wallet holding ${nftPhrase}.`
+          : `Prove you control a Solana wallet holding ${nftPhrase}.`,
         '',
       );
     }

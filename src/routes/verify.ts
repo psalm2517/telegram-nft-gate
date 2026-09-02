@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { getCachedCollectionName } from '../collection-cache.js';
 import { getConfiguredGroupTitle } from '../config-store.js';
 import type { AppContext } from '../context.js';
 import { badRequest, tooManyRequests, unauthorized } from '../lib/errors.js';
@@ -101,12 +102,20 @@ export async function handleSubmit(request: Request, ctx: AppContext): Promise<R
 
 /** Public, non-sensitive config the frontend needs to render itself. */
 export async function handlePublicConfig(ctx: AppContext): Promise<Response> {
+  const [groupTitle, collectionName] = await Promise.all([
+    getConfiguredGroupTitle(ctx.env.KV),
+    getCachedCollectionName(ctx.env.KV, ctx.ownership, ctx.config.nftCollectionId),
+  ]);
   return json({
     appName: ctx.config.appName,
     // The actual Telegram group's name, so the web page can say "join <group>"
     // instead of generic "the private Telegram group" phrasing. null until an
     // admin has confirmed a group via /setup.
-    groupTitle: await getConfiguredGroupTitle(ctx.env.KV),
+    groupTitle,
+    // Friendly collection name derived from the chain (e.g. "Solana Business
+    // Frogs"), so the page can say "an NFT from X" instead of generic
+    // "a qualifying NFT". null if DAS couldn't be reached.
+    collectionName,
     // The collection id is public on-chain data; the Helius API key is not and
     // never leaves the Worker.
     collectionId: ctx.config.nftCollectionId,

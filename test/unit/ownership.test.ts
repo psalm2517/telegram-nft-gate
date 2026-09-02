@@ -227,3 +227,39 @@ describe('OwnershipChecker.validateCollection', () => {
     expect(report.problems[0]).toMatch(/Could not fetch/);
   });
 });
+
+describe('OwnershipChecker.getCollectionName', () => {
+  it('returns the collection asset\'s display name', async () => {
+    const checker = new OwnershipChecker({
+      apiKey: 'k',
+      collectionId: TEST_COLLECTION,
+      endpoint: 'https://das.test/',
+      fetchImpl: async () =>
+        new Response(JSON.stringify({
+          result: { id: TEST_COLLECTION, interface: 'MplCoreCollection', content: { metadata: { name: 'Solana Business Frogs' } } },
+        })),
+    });
+    expect(await checker.getCollectionName()).toBe('Solana Business Frogs');
+  });
+
+  it('returns null rather than throwing when the collection cannot be fetched', async () => {
+    const checker = new OwnershipChecker({
+      apiKey: 'k',
+      collectionId: TEST_COLLECTION,
+      endpoint: 'https://das.test/',
+      fetchImpl: async () => new Response(JSON.stringify({ error: { message: 'not found' } })),
+    });
+    expect(await checker.getCollectionName()).toBeNull();
+  });
+
+  it('returns null when the asset has no metadata name', async () => {
+    const checker = new OwnershipChecker({
+      apiKey: 'k',
+      collectionId: TEST_COLLECTION,
+      endpoint: 'https://das.test/',
+      fetchImpl: async () =>
+        new Response(JSON.stringify({ result: { id: TEST_COLLECTION, interface: 'MplCoreCollection' } })),
+    });
+    expect(await checker.getCollectionName()).toBeNull();
+  });
+});

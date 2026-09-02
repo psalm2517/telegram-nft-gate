@@ -40,6 +40,7 @@ export class FakeOwnership {
   public calls: string[] = [];
   private responses = new Map<string, OwnershipResult>();
   private fallback: OwnershipResult = { status: 'NOT_OWNED', count: 0 };
+  private collectionName: string | null = null;
 
   set(address: string, status: OwnershipStatus, extra: Partial<OwnershipResult> = {}) {
     this.responses.set(address, { status, ...extra });
@@ -58,6 +59,15 @@ export class FakeOwnership {
 
   async countOwned(address: string): Promise<OwnershipResult> {
     return this.ownsAtLeastOne(address);
+  }
+
+  setCollectionName(name: string | null) {
+    this.collectionName = name;
+    return this;
+  }
+
+  async getCollectionName(): Promise<string | null> {
+    return this.collectionName;
   }
 }
 

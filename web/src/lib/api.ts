@@ -54,6 +54,8 @@ export interface PublicConfig {
   appName: string;
   /** The actual Telegram group's name, or null until an admin has confirmed one. */
   groupTitle: string | null;
+  /** Friendly collection name derived from the chain, or null if unavailable. */
+  collectionName: string | null;
   collectionId: string;
   gracePeriodHours: number;
   migrationMode: boolean;

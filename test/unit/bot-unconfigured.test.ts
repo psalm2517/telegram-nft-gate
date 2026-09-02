@@ -18,6 +18,10 @@ const NON_ADMIN_ID = '999999';
 async function resetKvState(): Promise<void> {
   await env.KV.delete(`admin-menu-set:${ADMIN_ID}`);
   await env.KV.delete('config:telegram_group_title');
+  // The collection-name cache is keyed by collection id, which is shared
+  // across test files (same TEST_COLLECTION/NFT_COLLECTION_ID everywhere) —
+  // clear it so another file's cached name can't leak into these tests.
+  await env.KV.delete('cache:collection_name:J7rxtKmEpNJEtrfkagiTF1gsmLyVus6BQZFY4ouBkeMG');
   const rateLimitKeys = await env.KV.list({ prefix: 'rl:' });
   await Promise.all(rateLimitKeys.keys.map((k) => env.KV.delete(k.name)));
 }

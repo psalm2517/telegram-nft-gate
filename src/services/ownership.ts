@@ -225,6 +225,19 @@ export class OwnershipChecker {
     };
   }
 
+  /**
+   * The collection's own display name (e.g. "Solana Business Frogs"), for
+   * de-genericizing user-facing text — "hold an NFT from {name}" instead of
+   * "hold a qualifying NFT". Derived from the chain, not operator config, so
+   * it needs nothing beyond NFT_COLLECTION_ID to work. Returns null on any
+   * failure; callers should fall back to generic phrasing, never block on it.
+   */
+  async getCollectionName(): Promise<string | null> {
+    const res = await this.getAsset(this.options.collectionId);
+    if (res.status !== 'ok') return null;
+    return res.asset.content?.metadata?.name ?? null;
+  }
+
   private async getAsset(
     id: string,
   ): Promise<
