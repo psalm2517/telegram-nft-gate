@@ -29,14 +29,10 @@ export async function createContext(env: Env, requestUrl?: string): Promise<AppC
   const config = loadConfig(env);
 
   // A group confirmed at runtime via /setup always wins over a deploy-time
-  // env var, so /setup can (re)point either group even for a deployment that
-  // originally pinned one through TELEGRAM_GROUP_ID / GATE_GROUP_ID.
-  const [confirmedMainId, confirmedGateId] = await Promise.all([
-    getConfiguredGroupId(env.KV, 'main'),
-    getConfiguredGroupId(env.KV, 'gate'),
-  ]);
-  if (confirmedMainId) config.telegramGroupId = confirmedMainId;
-  if (confirmedGateId) config.gateGroupId = confirmedGateId;
+  // TELEGRAM_GROUP_ID, so /setup can (re)point the gate even for a deployment
+  // that originally pinned a group through the env var.
+  const confirmedGroupId = await getConfiguredGroupId(env.KV);
+  if (confirmedGroupId) config.telegramGroupId = confirmedGroupId;
 
   const db = new Database(env.DB);
   const telegram = new TelegramClient({

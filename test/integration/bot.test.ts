@@ -73,12 +73,7 @@ beforeEach(async () => {
   await resetDatabase();
   await env.KV.delete('telegram:bot-info');
   await env.KV.delete('config:telegram_group_id');
-  await env.KV.delete('config:gate_group_id');
   await env.KV.delete('pending:group_detect');
-  // Rate-limit buckets (rl:*) would otherwise leak across tests that reuse
-  // the same Telegram user id, since /start and /verify share a bucket.
-  const rateLimitKeys = await env.KV.list({ prefix: 'rl:' });
-  await Promise.all(rateLimitKeys.keys.map((k) => env.KV.delete(k.name)));
   sent.length = 0;
 });
 
@@ -283,41 +278,15 @@ describe('admin commands over the real webhook', () => {
   });
 });
 
-describe('start includes a verify button immediately', () => {
-  it('/start replies with a welcome message and an inline Verify button', async () => {
-    await sendUpdate(command('/start'));
-    const reply = sent.find((c) => c.method === 'sendMessage')!;
-    expect(String(reply.body.text)).toMatch(/Welcome to/);
-
-    const markup = reply.body.reply_markup as { inline_keyboard: { text: string; url: string }[][] };
-    const button = markup.inline_keyboard[0]![0]!;
-    expect(button.text).toBe('Verify wallet');
-    expect(button.url).toContain('/verify#token=');
-  });
-
-  it('/verify still works as an explicit fallback with the same button', async () => {
-    await sendUpdate(command('/verify'));
-    const reply = sent.find((c) => c.method === 'sendMessage')!;
-    const markup = reply.body.reply_markup as { inline_keyboard: { text: string; url: string }[][] };
-    expect(markup.inline_keyboard[0]![0]!.text).toBe('Verify wallet');
-  });
-
-  it('rate-limits repeated /start the same way as /verify', async () => {
-    for (let i = 0; i < 8; i++) await sendUpdate(command('/start'));
-    const texts = sent.filter((c) => c.method === 'sendMessage').map((c) => String(c.body.text));
-    expect(texts.some((t) => /Too many verification attempts/.test(t))).toBe(true);
-  });
-});
-
-describe('gate and main group setup via the bot', () => {
+describe('group setup via the bot', () => {
   const ADMIN_ID = 111111; // matches ADMIN_TELEGRAM_IDS in vitest.config.ts
   const NEW_GROUP_ID = -100777888;
   const BOT_OWN_ID = BOT_INFO.id;
 
-  const myChatMemberUpdate = (status: 'member' | 'administrator' | 'left', title = 'New Community', chatId = NEW_GROUP_ID) => ({
+  const myChatMemberUpdate = (status: 'member' | 'administrator' | 'left', title = 'New Community') => ({
     update_id: updateId++,
     my_chat_member: {
-      chat: { id: chatId, type: 'supergroup', title },
+      chat: { id: NEW_GROUP_ID, type: 'supergroup', title },
       from: { id: ADMIN_ID, is_bot: false, first_name: 'Admin' },
       date: Math.floor(Date.now() / 1000),
       old_chat_member: { status: 'left', user: { id: BOT_OWN_ID, is_bot: true, first_name: 'Gate Bot' } },
@@ -335,31 +304,32 @@ describe('gate and main group setup via the bot', () => {
     return update;
   };
 
-  it('detects being added to a group and asks admins which role it plays', async () => {
+  it('detects being added to a group and DMs admins to confirm', async () => {
     await sendUpdate(myChatMemberUpdate('administrator'));
 
     const pending = await env.KV.get('pending:group_detect', 'json') as { id: string; title: string } | null;
     expect(pending).toMatchObject({ id: String(NEW_GROUP_ID), title: 'New Community' });
 
-    const dm = sent.find((c) => c.method === 'sendMessage' && c.body.chat_id === String(ADMIN_ID));
+    const dm = sent.find(
+      (c) => c.method === 'sendMessage' && c.body.chat_id === String(ADMIN_ID),
+    );
     expect(String(dm?.body.text)).toMatch(/New Community/);
-    expect(String(dm?.body.text)).toMatch(/\/setup main confirm/);
-    expect(String(dm?.body.text)).toMatch(/\/setup gate confirm/);
+    expect(String(dm?.body.text)).toMatch(/\/setup confirm/);
   });
 
   it('ignores my_chat_member updates about someone else, not the bot itself', async () => {
     const update = myChatMemberUpdate('member');
-    update.my_chat_member.new_chat_member.user.id = 999999;
+    update.my_chat_member.new_chat_member.user.id = 999999; // a human, not the bot
     await sendUpdate(update);
     expect(await env.KV.get('pending:group_detect')).toBeNull();
   });
 
-  it('ignores the bot leaving', async () => {
+  it('ignores the bot leaving (does not create a pending confirmation)', async () => {
     await sendUpdate(myChatMemberUpdate('left'));
     expect(await env.KV.get('pending:group_detect')).toBeNull();
   });
 
-  it('does not re-notify for a group already assigned a role', async () => {
+  it('does not re-notify for a group that is already configured', async () => {
     await env.KV.put('config:telegram_group_id', String(NEW_GROUP_ID));
     await sendUpdate(myChatMemberUpdate('administrator'));
     expect(await env.KV.get('pending:group_detect')).toBeNull();
@@ -369,11 +339,10 @@ describe('gate and main group setup via the bot', () => {
   it('/setup with nothing configured explains how to get started', async () => {
     await sendUpdate(setupCommand('/setup'));
     const text = String(sent.find((c) => c.method === 'sendMessage')?.body.text);
-    expect(text).toMatch(/Main group: not configured yet/);
-    expect(text).toMatch(/Gate group: not configured yet/);
+    expect(text).toMatch(/No group configured yet/);
   });
 
-  it('/setup shows a pending group and lets you confirm it as main', async () => {
+  it('/setup shows a pending group and lets you confirm it', async () => {
     await sendUpdate(myChatMemberUpdate('administrator'));
     sent.length = 0;
 
@@ -381,11 +350,10 @@ describe('gate and main group setup via the bot', () => {
     expect(String(sent.find((c) => c.method === 'sendMessage')?.body.text)).toMatch(/Pending: "New Community"/);
 
     sent.length = 0;
-    await sendUpdate(setupCommand('/setup main confirm'));
-    expect(String(sent.find((c) => c.method === 'sendMessage')?.body.text)).toMatch(/Done.*New Community.*main/s);
+    await sendUpdate(setupCommand('/setup confirm'));
+    expect(String(sent.find((c) => c.method === 'sendMessage')?.body.text)).toMatch(/Done.*New Community/s);
 
     expect(await env.KV.get('config:telegram_group_id')).toBe(String(NEW_GROUP_ID));
-    expect(await env.KV.get('config:gate_group_id')).toBeNull();
     expect(await env.KV.get('pending:group_detect')).toBeNull();
 
     const audit = await env.DB.prepare(
@@ -394,37 +362,27 @@ describe('gate and main group setup via the bot', () => {
     expect(audit).toBeTruthy();
   });
 
-  it('confirms a second detected group as gate, independent of main', async () => {
-    await env.KV.put('config:telegram_group_id', String(NEW_GROUP_ID));
-    await sendUpdate(myChatMemberUpdate('administrator', 'Lobby', -100333444));
-    await sendUpdate(setupCommand('/setup gate confirm'));
-
-    expect(await env.KV.get('config:telegram_group_id')).toBe(String(NEW_GROUP_ID));
-    expect(await env.KV.get('config:gate_group_id')).toBe('-100333444');
-  });
-
   it('/setup confirm with nothing pending says so', async () => {
-    await sendUpdate(setupCommand('/setup main confirm'));
+    await sendUpdate(setupCommand('/setup confirm'));
     expect(String(sent.find((c) => c.method === 'sendMessage')?.body.text)).toMatch(/Nothing pending/);
   });
 
-  it('/setup <role> group <id> pins a group directly after validating it exists', async () => {
+  it('/setup group <id> pins a group directly after validating it exists', async () => {
     RESULTS.getChat = { id: -100555, type: 'supergroup', title: 'Direct Pin Group' };
-    await sendUpdate(setupCommand('/setup gate group -100555'));
+    await sendUpdate(setupCommand('/setup group -100555'));
 
     expect(String(sent.find((c) => c.method === 'sendMessage')?.body.text)).toMatch(/Direct Pin Group/);
-    expect(await env.KV.get('config:gate_group_id')).toBe('-100555');
-    expect(await env.KV.get('config:telegram_group_id')).toBeNull();
+    expect(await env.KV.get('config:telegram_group_id')).toBe('-100555');
   });
 
-  it('/setup <role> group <id> refuses a non-group chat', async () => {
+  it('/setup group <id> refuses a non-group chat (e.g. a private chat id)', async () => {
     RESULTS.getChat = { id: 12345, type: 'private' };
-    await sendUpdate(setupCommand('/setup main group 12345'));
+    await sendUpdate(setupCommand('/setup group 12345'));
     expect(String(sent.find((c) => c.method === 'sendMessage')?.body.text)).toMatch(/not a group or supergroup/);
     expect(await env.KV.get('config:telegram_group_id')).toBeNull();
   });
 
-  it('/setup <role> group <id> reports a clear error when the bot cannot see that chat', async () => {
+  it('/setup group <id> reports a clear error when the bot cannot see that chat', async () => {
     const originalFetch = globalThis.fetch;
     vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
@@ -434,7 +392,7 @@ describe('gate and main group setup via the bot', () => {
       return originalFetch(input, init);
     });
     try {
-      await sendUpdate(setupCommand('/setup main group -100999999'));
+      await sendUpdate(setupCommand('/setup group -100999999'));
       expect(String(sent.find((c) => c.method === 'sendMessage')?.body.text)).toMatch(/Could not find that chat/);
       expect(await env.KV.get('config:telegram_group_id')).toBeNull();
     } finally {
@@ -442,69 +400,8 @@ describe('gate and main group setup via the bot', () => {
     }
   });
 
-  it('rejects a role that is neither main nor gate', async () => {
-    await sendUpdate(setupCommand('/setup other confirm'));
-    expect(String(sent.find((c) => c.method === 'sendMessage')?.body.text)).toMatch(/Usage: \/setup/);
-  });
-
   it('/setup is invisible to non-admins', async () => {
     await sendUpdate(setupCommand('/setup', 555444));
     expect(String(sent.find((c) => c.method === 'sendMessage')?.body.text)).toBe('Unknown command.');
-  });
-});
-
-describe('gate group welcomes new joiners with a verify button', () => {
-  const GATE_GROUP_ID = -100222333;
-  const NEWCOMER_ID = 800900;
-
-  beforeEach(async () => {
-    await env.KV.put('config:gate_group_id', String(GATE_GROUP_ID));
-  });
-
-  const gateJoinUpdate = (opts: { oldStatus?: string; username?: string } = {}) => ({
-    update_id: updateId++,
-    chat_member: {
-      chat: { id: GATE_GROUP_ID, type: 'supergroup', title: 'Lobby' },
-      from: { id: NEWCOMER_ID, is_bot: false, first_name: 'New' },
-      date: Math.floor(Date.now() / 1000),
-      old_chat_member: {
-        status: opts.oldStatus ?? 'left',
-        user: { id: NEWCOMER_ID, is_bot: false, first_name: 'New' },
-      },
-      new_chat_member: {
-        status: 'member',
-        user: { id: NEWCOMER_ID, is_bot: false, first_name: 'New', username: opts.username },
-      },
-    },
-  });
-
-  it('posts a welcome message with a deep-link Verify button into the gate group', async () => {
-    await sendUpdate(gateJoinUpdate({ username: 'newperson' }));
-
-    const post = sent.find((c) => c.method === 'sendMessage' && c.body.chat_id === String(GATE_GROUP_ID));
-    expect(post).toBeTruthy();
-    expect(String(post?.body.text)).toMatch(/@newperson/);
-
-    const markup = post?.body.reply_markup as { inline_keyboard: { text: string; url: string }[][] };
-    expect(markup.inline_keyboard[0]![0]!.text).toBe('Verify');
-    expect(markup.inline_keyboard[0]![0]!.url).toBe(`https://t.me/${BOT_INFO.username}?start=verify`);
-  });
-
-  it('falls back to first name when the newcomer has no username', async () => {
-    await sendUpdate(gateJoinUpdate({}));
-    const post = sent.find((c) => c.method === 'sendMessage' && c.body.chat_id === String(GATE_GROUP_ID));
-    expect(String(post?.body.text)).toMatch(/New/);
-  });
-
-  it('does not re-welcome someone whose status merely changed (e.g. promoted)', async () => {
-    await sendUpdate(gateJoinUpdate({ oldStatus: 'member' }));
-    expect(sent.find((c) => c.method === 'sendMessage' && c.body.chat_id === String(GATE_GROUP_ID))).toBeUndefined();
-  });
-
-  it('does not touch the main-group migration logic for a gate-group join', async () => {
-    await sendUpdate(gateJoinUpdate({ username: 'newperson' }));
-    const user = await env.DB.prepare('SELECT * FROM users WHERE telegram_user_id = ?')
-      .bind(String(NEWCOMER_ID)).first();
-    expect(user).toBeNull(); // gate joins are not recorded as app users
   });
 });

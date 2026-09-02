@@ -1,25 +1,12 @@
 /**
- * Runtime-confirmed group state, set by /setup in the bot rather than a
+ * The runtime-confirmed group id, set by /setup in the bot rather than a
  * deploy-time secret. Lives in KV, not D1, because it is read on essentially
  * every request and KV is the cheap-read binding for exactly that shape of
- * data.
- *
- * There are two roles, matching the two-group model the bot implements:
- *   - "main"  — the private, invite-only group granted after verification.
- *   - "gate"  — the public lobby group people join before verifying; the bot
- *               is not access-control-gating this one, just watching for
- *               joins to prompt them.
- *
- * A KV-confirmed value wins over the matching env var (TELEGRAM_GROUP_ID /
- * GATE_GROUP_ID) when both are present, so /setup can always (re)point either
- * group even for an operator who originally pinned one via env.
+ * data. KV wins over TELEGRAM_GROUP_ID when both are present, so /setup can
+ * always (re)point the gate even for an operator who originally pinned a
+ * group via the env var.
  */
-export type GroupRole = 'main' | 'gate';
-
-const GROUP_ID_KEY: Record<GroupRole, string> = {
-  main: 'config:telegram_group_id',
-  gate: 'config:gate_group_id',
-};
+const GROUP_ID_KEY = 'config:telegram_group_id';
 
 /** A group the bot was just added to, awaiting an admin's /setup confirm. */
 const PENDING_GROUP_KEY = 'pending:group_detect';
@@ -30,16 +17,12 @@ export interface PendingGroup {
   detectedAt: string;
 }
 
-export async function getConfiguredGroupId(kv: KVNamespace, role: GroupRole): Promise<string | null> {
-  return kv.get(GROUP_ID_KEY[role]);
+export async function getConfiguredGroupId(kv: KVNamespace): Promise<string | null> {
+  return kv.get(GROUP_ID_KEY);
 }
 
-export async function setConfiguredGroupId(
-  kv: KVNamespace,
-  role: GroupRole,
-  groupId: string,
-): Promise<void> {
-  await kv.put(GROUP_ID_KEY[role], groupId);
+export async function setConfiguredGroupId(kv: KVNamespace, groupId: string): Promise<void> {
+  await kv.put(GROUP_ID_KEY, groupId);
 }
 
 export async function getPendingGroup(kv: KVNamespace): Promise<PendingGroup | null> {

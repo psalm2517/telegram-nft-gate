@@ -162,55 +162,29 @@ probing command names cannot distinguish "does not exist" from "exists but
 you're not authorized". Removing an id from `ADMIN_TELEGRAM_IDS` and
 redeploying revokes admin access immediately.
 
-## Two groups: gate and main
+## Group configuration
 
-The bot distinguishes two roles, tracked independently:
+`TELEGRAM_GROUP_ID` is an optional deploy-time default, not the source of
+truth. `src/config-store.ts` holds two KV-backed values that take precedence:
 
-- **main** — the private, invite-only group the access-control state machine
-  actually manages (invites, removals, membership checks — everything in
-  `services/access.ts`).
-- **gate** — a public lobby the bot only watches for joins, to post a
-  "Verify" button. It carries no access control of its own; a user's presence
-  there has no bearing on their `users.status`.
-
-`TELEGRAM_GROUP_ID` (main) and `GATE_GROUP_ID` (gate) are optional deploy-time
-defaults, not the source of truth. `src/config-store.ts` holds the KV-backed
-values that take precedence, keyed by role:
-
-- `config:telegram_group_id` / `config:gate_group_id` — set by an admin via
-  `/setup main confirm`, `/setup gate confirm`, or `/setup <role> group <id>`
-  in `src/bot/bot.ts`.
+- `config:telegram_group_id` — the confirmed gate target, set by an admin via
+  `/setup confirm` or `/setup group <id>` in `src/bot/bot.ts`.
 - `pending:group_detect` — a group the bot was just added to (detected via the
-  `my_chat_member` webhook update), awaiting an admin to assign it a role.
-  Expires after seven days if nobody acts on it. There is one pending slot,
-  not one per role — assigning the two groups happens as two sequential
-  add-then-confirm cycles.
+  `my_chat_member` webhook update), awaiting that confirmation. Expires after
+  seven days if nobody acts on it.
 
-`context.ts` resolves each role's effective group id independently on every
-request: KV value if present, else the matching env var, else an empty
-string. This lets an operator pin either group at deploy time (useful for
-reproducible, config-as-code deployments) or skip that entirely and configure
-both conversationally after the Worker is already live — `/setup` can always
-override a pinned value later, since KV wins.
+`context.ts` resolves the effective group id on every request: KV value if
+present, else `TELEGRAM_GROUP_ID`, else an empty string. This lets an operator
+either pin a group at deploy time (useful for reproducible, config-as-code
+deployments) or skip that entirely and configure it conversationally after the
+Worker is already live — `/setup` can always override a pinned value later,
+since KV wins.
 
-An unconfigured group is not a startup error: `loadConfig` never requires
-either. Telegram calls that need a real chat id (invites, removals, membership
-checks, or the gate group's welcome post) simply fail with an ordinary
-`TelegramOutcome` error until one is confirmed, which the rest of the system
-already treats the same way it treats any other Telegram API failure. A
-deployment can also run with only a main group configured — the gate group is
-purely additive, never required (see
-[the note in telegram-setup.md](telegram-setup.md#running-with-only-one-group)).
-
-### Why a deep link, not a proactive DM
-
-The gate group's `chat_member` handler cannot DM a new joiner directly —
-Telegram only allows a bot to message a user who has itself initiated contact
-with the bot. Posting a `t.me/<bot>?start=verify` deep-link button *in the
-group* sidesteps this: tapping it is the user starting the conversation, which
-is also what lets `/start` (whether reached this way or typed directly) reply
-immediately with the same signed verify-link button `/verify` produces —
-`bot.ts`'s `replyWithVerifyLink` is shared by both.
+An unconfigured group is not a startup error: `loadConfig` never requires it.
+Telegram calls that need a real chat id (invites, removals, membership checks)
+simply fail with an ordinary `TelegramOutcome` error until one is confirmed,
+which the rest of the system already treats the same way it treats any other
+Telegram API failure.
 
 ## Rate limiting
 
