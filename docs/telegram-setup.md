@@ -11,12 +11,13 @@ Message [@BotFather](https://t.me/BotFather):
 Save the token — it goes into `TELEGRAM_BOT_TOKEN`. Treat it like a password;
 anyone holding it controls the bot.
 
-Then disable group privacy mode, so the bot receives the membership updates it
-needs:
-
-```
-/setprivacy  →  select your bot  →  Disable
-```
+Leave Group Privacy at its default (enabled). It only restricts a bot's view
+of ordinary member messages, not `chat_member`/`my_chat_member`/service
+updates — those reach any bot that's a group admin regardless, and this bot
+is always added as one (see [§2](#2-required-permissions)). Disabling privacy
+mode would just start delivering ordinary group chatter to the bot for no
+benefit, and requires removing and re-adding the bot to the group to take
+effect.
 
 Optionally register the command list so they autocomplete:
 
