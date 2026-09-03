@@ -1,11 +1,17 @@
 # Deployment
 
+The whole path is: create two Cloudflare resources, put their ids in
+`wrangler.jsonc`, set six secrets, migrate, deploy, point Telegram at it. No CI
+setup, no GitHub secrets, no dashboard build configuration — those are optional
+extras covered at the end, and most deployments never need them.
+
 ## Prerequisites
 
 - Node.js ≥ 22.12 and pnpm
 - A Cloudflare account (`pnpm exec wrangler login`)
-- A Helius API key — <https://dashboard.helius.dev>
 - A Telegram bot and group — see [`telegram-setup.md`](telegram-setup.md)
+- Optionally a Helius API key — <https://dashboard.helius.dev>. Without one,
+  ownership checks use the public Solana RPC.
 
 ## 1. Create resources
 
@@ -17,22 +23,42 @@ pnpm exec wrangler d1 create telegram-nft-gate
 pnpm exec wrangler kv namespace create KV
 ```
 
-`wrangler.jsonc` stays committed with zero placeholders — it's the template
-every fork shares. Your real `database_id` and KV `id` go in a copy that
-never gets tracked:
+Each command prints an id. Put them in `wrangler.jsonc`, replacing the zero
+placeholders — `database_id` from the first, the KV `id` from the second. Set
+`name` too if you want the Worker called something other than
+`telegram-nft-gate`.
+
+That is all most deployments ever need to do with this file. Commit it to your
+own fork like any other config.
+
+<details>
+<summary>Keeping your resource ids out of git</summary>
+
+Only relevant if your fork is also a public template others copy from, as the
+upstream repo is: committing your ids there hands every downstream fork a config
+pointing at resources they cannot access.
+
+Resource ids are not secrets — they are useless without your account
+credentials — so this is about not confusing forks, not about exposure.
+
+If you want them out of the committed file, copy it instead of editing it:
 
 ```bash
 cp wrangler.jsonc wrangler.local.jsonc
 ```
 
-Edit `wrangler.local.jsonc` (already gitignored) with the `database_id` and
-namespace `id` the two commands above returned, and `name` if you want the
-Worker called something other than `telegram-nft-gate`. From here on, deploy
-with:
+Put the real ids in `wrangler.local.jsonc`, which is gitignored. Every
+`pnpm run` script prefers it automatically when it exists, so nothing else
+changes. `wrangler.jsonc` keeps its placeholders.
 
-```bash
-pnpm exec wrangler deploy -c wrangler.local.jsonc
-```
+</details>
+
+> Wrangler has no way to read `database_id`/KV `id` from the dashboard or from
+> environment variables the way it reads vars and secrets: `wrangler deploy`
+> treats its config file as the authoritative definition of the Worker,
+> bindings included, on every deploy. They have to be in a file on disk at
+> deploy time. `scripts/wrangler.mjs` picks which file — see
+> [Deploying](#deploying) below.
 
 ## 2. Validate your collection id
 
@@ -103,6 +129,8 @@ missing) frontend.
 Point Telegram at the deployed Worker — see
 [`telegram-setup.md`](telegram-setup.md#5-register-the-webhook).
 
+
+
 ## 6. Verify the deployment
 
 ```bash
@@ -116,6 +144,106 @@ curl -s https://<your-worker>/api/config
 `/api/config` must show your collection id and **must not** contain your Helius
 key. Then open `https://<your-worker>/` in a browser to confirm the Worker is
 serving the React bundle, and run `/verify` end-to-end from Telegram.
+
+---
+
+## Deploying
+
+```bash
+pnpm run deploy
+```
+
+That builds the React bundle into `web/dist` and deploys. Run it whenever you
+want to ship; nothing else is required, and this is how most deployments should
+operate indefinitely.
+
+Every wrangler-invoking script goes through `scripts/wrangler.mjs`, which picks
+the config file so the same command works in all three situations:
+
+| If | It uses |
+| --- | --- |
+| `wrangler.local.jsonc` exists | that file |
+| `CF_D1_DATABASE_ID` + `CF_KV_NAMESPACE_ID` are set | `wrangler.jsonc` with those ids substituted in |
+| neither | `wrangler.jsonc` as-is |
+
+If none of those yields real ids, it stops with an explanation rather than
+letting the deploy fail deep inside the Cloudflare API with
+`KV namespace '000…0' not found`.
+
+### Optional: deploy automatically on push
+
+Not required. Manual `pnpm run deploy` is a complete, supported workflow.
+
+Pick **one** of the two options below. Running both means two `wrangler deploy`
+runs racing each other on every push.
+
+<details>
+<summary>Option A — Cloudflare Workers Builds (dashboard)</summary>
+
+Connect the repo under **Workers &amp; Pages → your Worker → Settings → Build**.
+
+Cloudflare's build runner has no `wrangler.local.jsonc`, so give it the ids as
+**build** environment variables. These live under **Settings → Build**, which is
+a different screen from the Worker's own **Variables and Secrets** — putting them
+in the latter does nothing, because the build never sees runtime bindings.
+
+| Build variable | Value |
+| --- | --- |
+| `D1_DATABASE_ID` | your `database_id` |
+| `KV_NAMESPACE_ID` | your KV namespace id |
+
+Then set:
+
+- **Build command**: `pnpm install --frozen-lockfile && pnpm run build:web`
+- **Deploy command**: `node scripts/wrangler.mjs deploy`
+
+The deploy command reads those two build variables and substitutes them itself.
+
+</details>
+
+<details>
+<summary>Option B — GitHub Actions</summary>
+
+Keeps deploy config in the repo rather than a dashboard. Add four repository
+secrets (**Settings → Secrets and variables → Actions**):
+
+| Secret | Value |
+| --- | --- |
+| `CLOUDFLARE_API_TOKEN` | an API token from the **Edit Cloudflare Workers** template |
+| `CLOUDFLARE_ACCOUNT_ID` | your account id |
+| `CF_D1_DATABASE_ID` | your `database_id` |
+| `CF_KV_NAMESPACE_ID` | your KV namespace id |
+
+Then append this job to [`.github/workflows/ci.yml`](../.github/workflows/ci.yml):
+
+```yaml
+  deploy:
+    needs: check
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build:web
+      - uses: cloudflare/wrangler-action@v3
+        env:
+          CF_D1_DATABASE_ID: ${{ secrets.CF_D1_DATABASE_ID }}
+          CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy
+```
+
+If you use this, disconnect the Git integration in Option A so the two do not
+both deploy.
+
+</details>
 
 ---
 

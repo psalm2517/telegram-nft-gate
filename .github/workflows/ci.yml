@@ -32,37 +32,10 @@ jobs:
 
       - run: pnpm run build:worker
 
-  # Runs only on an actual push to main, never on a PR, and only once `check`
-  # passes. Real database_id/KV id never touch the repo: this stamps them
-  # into a throwaway copy of wrangler.jsonc at deploy time from GitHub's
-  # encrypted secrets, then deploys with that copy.
-  deploy:
-    needs: check
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
-
-      - run: pnpm run build:web
-
-      - name: Stamp real resource ids into a throwaway deploy config
-        run: |
-          sed \
-            -e "s/00000000-0000-0000-0000-000000000000/${{ secrets.CF_D1_DATABASE_ID }}/" \
-            -e "s/00000000000000000000000000000000/${{ secrets.CF_KV_NAMESPACE_ID }}/" \
-            wrangler.jsonc > wrangler.ci.jsonc
-
-      - uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy -c wrangler.ci.jsonc
+# This workflow deliberately only checks; it does not deploy.
+#
+# Deploying from here as well as from Cloudflare's own Workers Builds (which is
+# connected to this repo and is the active deploy path) meant two `wrangler
+# deploy` runs racing each other on every push to main. One pipeline is enough.
+# See docs/deployment.md for how deploys actually happen, and for how to move
+# them here instead if you would rather keep CI/CD in one place.

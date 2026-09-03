@@ -82,15 +82,9 @@ pnpm exec wrangler d1 create telegram-nft-gate
 pnpm exec wrangler kv namespace create KV
 ```
 
-`wrangler.jsonc` stays committed with zero placeholders. Put your real ids in
-a gitignored copy instead:
-
-```bash
-cp wrangler.jsonc wrangler.local.jsonc   # then fill in the ids above
-```
-
-`pnpm run dev`, `deploy`, and the `db:migrate:*` scripts all point at
-`wrangler.local.jsonc` already — see [`deployment.md`](docs/deployment.md).
+Both commands print an id. Put them in `wrangler.jsonc`, replacing the zero
+placeholders. (If your fork is itself a public template, there's a gitignored
+alternative — see [`deployment.md`](docs/deployment.md#1-create-resources).)
 
 Validate your collection id against the chain **before** going live:
 
