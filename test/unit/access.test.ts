@@ -48,6 +48,19 @@ describe('access state machine', () => {
     expect(ctx.fakeTelegram.invites).toHaveLength(0);
   });
 
+  it('tells an already-eligible user they reconfirmed, not that a link is coming', async () => {
+    const user = await seedUser(ctx, '1', { status: 'eligible', verified_at: hoursAgo(1) });
+
+    const decision = await ctx.access.applyOwnership(user, 'OWNED', { source: 'verification' });
+    expect(decision.newStatus).toBe('eligible');
+    expect(decision.changed).toBe(false);
+    expect(decision.inviteLink).toBeUndefined();
+    // Without this, a user re-verifying while already eligible gets no
+    // Telegram message at all, while the web page still tells them to check
+    // their chat "for your invite link" — a link that never arrives.
+    expect(decision.notify).toBeTruthy();
+  });
+
   it('starts a grace period when an eligible holder loses their NFT', async () => {
     const user = await seedUser(ctx, '1', { status: 'eligible' });
     const decision = await ctx.access.applyOwnership(user, 'NOT_OWNED', { source: 'recheck' });

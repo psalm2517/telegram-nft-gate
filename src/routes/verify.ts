@@ -96,7 +96,9 @@ export async function handleSubmit(request: Request, ctx: AppContext): Promise<R
     ok: true,
     status: decision.newStatus,
     message:
-      'Verification complete. Check your Telegram chat with the bot for your invite link.',
+      decision.notify || decision.inviteLink
+        ? 'Verification complete. Check your Telegram chat with the bot for details.'
+        : 'Verification complete.',
   });
 }
 

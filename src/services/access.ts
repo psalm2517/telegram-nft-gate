@@ -96,6 +96,7 @@ export class AccessService {
         changed: false,
         ownership: 'OWNED',
         reason: 'still_eligible',
+        notify: 'Ownership reconfirmed. You are already verified and your access is active — no new invite link needed.',
       };
     }
 
