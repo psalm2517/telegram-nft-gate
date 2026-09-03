@@ -134,6 +134,11 @@ A group confirmed this way always takes precedence over a `TELEGRAM_GROUP_ID`
 env var, so `/setup` can also be used to re-point an existing deployment at a
 different group later.
 
+Once a group is confirmed, adding the bot to any other group does not open a
+second confirmation flow. It leaves that group immediately and only sends
+admins an informational DM, so being added somewhere unexpected can't be used
+to trick an admin into repointing the gate.
+
 ## 6. Confirm it works
 
 In a direct chat with the bot:

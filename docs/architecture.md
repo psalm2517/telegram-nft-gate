@@ -180,6 +180,13 @@ truth. `src/config-store.ts` holds two KV-backed values that take precedence:
   `my_chat_member` webhook update), awaiting that confirmation. Expires after
   seven days if nobody acts on it.
 
+Once a group is confirmed, this pending flow does not apply to any other one.
+Being added to a different group is not treated as a setup event: the bot
+calls `leaveChat` immediately and only sends admins an informational DM, with
+no "reply to confirm" prompt. Anyone who can add the bot to a chat they
+control could otherwise generate that prompt and get an admin, acting in the
+wrong context, to repoint the gate at a group they don't own.
+
 `context.ts` resolves the effective group id on every request: KV value if
 present, else `TELEGRAM_GROUP_ID`, else an empty string. This lets an operator
 either pin a group at deploy time (useful for reproducible, config-as-code
