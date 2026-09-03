@@ -176,6 +176,8 @@ specific collection or community is baked into the code. See
 | `RECHECK_BATCH_SIZE` | `100` | Users re-checked per cron invocation |
 | `JOIN_VERIFICATION_HOURS` | `1` | How long a member may stay unverified before removal |
 | `PUBLIC_BASE_URL` | inferred | Origin used in generated links |
+| `BRAND_ICON_URL` | none | Favicon and verify-page avatar. Purely cosmetic |
+| `BRAND_SUCCESS_ICON_URL` | `BRAND_ICON_URL` | Image on the "verification complete" screen |
 
 ---
 
