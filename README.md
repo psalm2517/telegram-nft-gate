@@ -1,6 +1,19 @@
-# telegram-nft-gate
+<div align="center">
 
-Gate a private Telegram group on Solana NFT ownership.
+# NFT Gate
+[Landing page](https://nftgate.vsvn.net) · [Docs](https://nftgate.vsvn.net/docs)
+
+**Gate a private Telegram group on verified Solana NFT ownership.**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+[![CI](https://github.com/psalm2517/telegram-nft-gate/actions/workflows/ci.yml/badge.svg)](https://github.com/psalm2517/telegram-nft-gate/actions/workflows/ci.yml)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6.svg?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-f38020.svg?logo=cloudflare&logoColor=white)](https://workers.cloudflare.com)
+[![Stars](https://img.shields.io/github/stars/psalm2517/telegram-nft-gate)](https://github.com/psalm2517/telegram-nft-gate/stargazers)
+
+</div>
+
+---
 
 A member proves they control a wallet holding at least one NFT from a configured
 collection, and the bot grants them access. Ownership is re-checked on a
@@ -16,6 +29,17 @@ bot commands, not a separate dashboard.
 > [Solana Business Frogs](#the-reference-collection), but nothing about that
 > collection is hard-coded. Point `NFT_COLLECTION_ID` at your own collection and
 > the software works unchanged.
+
+---
+
+## Deploy
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/psalm2517/telegram-nft-gate)
+
+Forks the repo, provisions D1 and KV, and deploys the Worker. It can't create
+your Telegram bot, validate your collection id, or register the webhook —
+those need your own Telegram/Solana context and are covered in
+[Quick start](#quick-start) below.
 
 ---
 
@@ -215,6 +239,16 @@ established and how to reproduce the check yourself.
 Found a security issue? Please report it privately rather than opening a public
 issue.
 
+## AI disclosure
+
+This project was built with AI assistance, directed by me.
+
 ## License
 
-MIT — see [`LICENSE`](LICENSE).
+MIT. See [LICENSE](./LICENSE).
+
+<div align="center">
+
+[![Built with Cloudflare](https://workers.cloudflare.com/built-with-cloudflare.svg)](https://cloudflare.com)
+
+</div>
