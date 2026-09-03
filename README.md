@@ -1,7 +1,7 @@
 <div align="center">
 
 # NFT Gate
-[Landing page](https://nftgate.vsvn.net) · [Docs](https://nftgate.vsvn.net/docs)
+[Website](https://nftgate.vsvn.net) · [Docs](https://nftgate.vsvn.net/docs)
 
 **Gate a private Telegram group on verified Solana NFT ownership.**
 
