@@ -2,7 +2,7 @@
  * A curated fallback for wallets the Wallet Standard registry hasn't detected
  * (nothing installed, or a browser extension that hasn't injected yet).
  *
- * Wallet Standard can only ever list wallets already present in the page —
+ * Wallet Standard can only ever list wallets already present in the page:
  * it has no concept of "not installed". Without this list, a visitor with no
  * extension sees an empty state and a vague "install something" message
  * instead of a recognizable button, which is what most wallet-gated sites
@@ -10,7 +10,7 @@
  *
  * Deep links follow each wallet's own documented "Browse" universal link,
  * which opens the current page inside that wallet's in-app browser on
- * mobile (where the extension model doesn't apply at all) — at that point
+ * mobile (where the extension model doesn't apply at all): at that point
  * Wallet Standard detects the wallet normally, because its own webview
  * injects the provider.
  */

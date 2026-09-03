@@ -42,6 +42,18 @@ describe('DAS endpoint resolution', () => {
   });
 });
 
+describe('JOIN_VERIFICATION_HOURS default', () => {
+  it('defaults to 1 hour when unset', () => {
+    const config = loadConfig(baseEnv({ JOIN_VERIFICATION_HOURS: undefined }));
+    expect(config.joinVerificationHours).toBe(1);
+  });
+
+  it('honours an explicit value', () => {
+    const config = loadConfig(baseEnv({ JOIN_VERIFICATION_HOURS: '6' }));
+    expect(config.joinVerificationHours).toBe(6);
+  });
+});
+
 describe('MIGRATION_MODE default', () => {
   it('defaults to true (safe) when entirely unset', () => {
     const config = loadConfig(baseEnv({ MIGRATION_MODE: undefined }));

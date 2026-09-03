@@ -92,7 +92,8 @@ openssl rand -base64 32
 
 Non-secret behaviour (`MIGRATION_MODE`, `ACCESS_GRACE_PERIOD_HOURS`,
 `CHALLENGE_TTL_SECONDS`, `RECHECK_BATCH_SIZE`, `RECHECK_INTERVAL_HOURS`,
-`APP_NAME`) is also set in the dashboard's "Variables and secrets" screen,
+`JOIN_VERIFICATION_HOURS`, `APP_NAME`) is also set in the dashboard's
+"Variables and secrets" screen,
 alongside the secrets above: as plain `Text` values, not `Secret`. Every one
 has a safe fallback if you leave it unset (see `src/env.ts`).
 

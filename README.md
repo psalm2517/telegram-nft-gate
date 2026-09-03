@@ -172,6 +172,7 @@ specific collection or community is baked into the code. See
 | `CHALLENGE_TTL_SECONDS` | `300` | Signing-challenge lifetime |
 | `RECHECK_INTERVAL_HOURS` | `12` | How stale a check may get before re-running |
 | `RECHECK_BATCH_SIZE` | `100` | Users re-checked per cron invocation |
+| `JOIN_VERIFICATION_HOURS` | `1` | How long a member may stay unverified before removal |
 | `PUBLIC_BASE_URL` | inferred | Origin used in generated links |
 
 ---
@@ -228,6 +229,9 @@ established and how to reproduce the check yourself.
   work in a private chat; a non-admin gets a generic "Unknown command." reply
   rather than one that confirms the command exists.
 - Every state transition and administrative action is written to an audit table.
+- A leaked single-use invite link only ever admits one join, but that join
+  isn't bound to the account the link was minted for. Anyone who joins without
+  completing verification within `JOIN_VERIFICATION_HOURS` is removed.
 
 Found a security issue? Please report it privately rather than opening a public
 issue.

@@ -3,7 +3,7 @@ import { buildContext, resetDatabase, type TestContext } from '../helpers.js';
 import { runScheduledRecheck } from '../../src/scheduled.js';
 import type { UserRow } from '../../src/services/db.js';
 
-/** Distinct, valid-shaped wallet per user — the schema enforces one wallet per account. */
+/** Distinct, valid-shaped wallet per user: the schema enforces one wallet per account. */
 const walletFor = (id: string) =>
   `Wa11et${id}`.padEnd(44, 'x').slice(0, 44);
 
@@ -58,13 +58,13 @@ describe('access state machine', () => {
     expect(decision.inviteLink).toBeUndefined();
     // Without this, a user re-verifying while already eligible gets no
     // Telegram message at all, while the web page still tells them to check
-    // their chat "for your invite link" — a link that never arrives.
+    // their chat "for your invite link", a link that never arrives.
     expect(decision.notify).toBeTruthy();
   });
 
   it('issues a fresh invite to an eligible user who left the group voluntarily', async () => {
     // Leaving the group is not a tracked transition (see the bot's
-    // chat_member handler) — DB status stays `eligible` exactly as if they'd
+    // chat_member handler), so DB status stays `eligible` exactly as if they'd
     // never left. Telegram's own membership check is the only thing that can
     // tell "still inside" apart from "eligible but needs back in".
     const user = await seedUser(ctx, '1', { status: 'eligible', verified_at: hoursAgo(1) });
@@ -364,5 +364,112 @@ describe('scheduled recheck', () => {
     ctxSmall.fakeOwnership.setDefault('OWNED');
     const summary = await runScheduledRecheck(ctxSmall);
     expect(summary.checked).toBe(2);
+  });
+});
+
+describe('unverified-joiner removal', () => {
+  let ctx: TestContext;
+  beforeEach(async () => {
+    await resetDatabase();
+    ctx = await buildContext();
+  });
+
+  /** Record a `joined_group` access event as if it happened `hoursAgoJoined` ago. */
+  async function seedJoiner(
+    ctx: TestContext,
+    telegramUserId: string,
+    hoursAgoJoined: number,
+  ): Promise<void> {
+    await ctx.db.upsertUser(telegramUserId, `user${telegramUserId}`);
+    await ctx.db.recordAccessEvent({
+      telegramUserId,
+      action: 'joined_group',
+      newState: 'member',
+      reason: 'test',
+      at: hoursAgo(hoursAgoJoined),
+    });
+  }
+
+  it('removes a member who never verified within the join window', async () => {
+    // A single-use link limits a leak to one join, not to the account it was
+    // minted for; whoever actually used it still has to verify themselves.
+    await seedJoiner(ctx, 'squatter', 2);
+
+    const summary = await runScheduledRecheck(ctx);
+
+    expect(summary.unverifiedRemoved).toBe(1);
+    expect(ctx.fakeTelegram.removed).toEqual(['squatter']);
+    expect((await ctx.db.getUserByTelegramId('squatter'))?.status).toBe('revoked');
+  });
+
+  it('leaves a member alone until the join window has actually elapsed', async () => {
+    await seedJoiner(ctx, 'fresh', 0.5);
+
+    const summary = await runScheduledRecheck(ctx);
+
+    expect(summary.unverifiedRemoved).toBe(0);
+    expect(ctx.fakeTelegram.removed).toHaveLength(0);
+    expect((await ctx.db.getUserByTelegramId('fresh'))?.status).toBe('unverified');
+  });
+
+  it('never touches someone who verified before their window expired', async () => {
+    const user = await seedUser(ctx, 'legit', { status: 'eligible' });
+    ctx.fakeOwnership.set(walletFor('legit'), 'OWNED');
+    await ctx.db.recordAccessEvent({
+      telegramUserId: 'legit',
+      action: 'joined_group',
+      newState: 'member',
+      reason: 'test',
+      at: hoursAgo(2),
+    });
+
+    const summary = await runScheduledRecheck(ctx);
+
+    expect(summary.unverifiedRemoved).toBe(0);
+    expect(ctx.fakeTelegram.removed).not.toContain('legit');
+    expect((await ctx.db.getUserByTelegramId(user.telegram_user_id))?.status).toBe('eligible');
+  });
+
+  it('protects a legacy member exactly like ordinary migration-mode revocation', async () => {
+    const migrationCtx = await buildContext({ MIGRATION_MODE: 'true' });
+    await migrationCtx.db.upsertUser('grandfathered', 'x', { isLegacyMember: true });
+    await migrationCtx.db.recordAccessEvent({
+      telegramUserId: 'grandfathered',
+      action: 'joined_group',
+      newState: 'member',
+      reason: 'test',
+      at: hoursAgo(2),
+    });
+
+    const summary = await runScheduledRecheck(migrationCtx);
+
+    expect(summary.unverifiedRemoved).toBe(0);
+    expect(migrationCtx.fakeTelegram.removed).toHaveLength(0);
+    expect((await migrationCtx.db.getUserByTelegramId('grandfathered'))?.status).toBe('unverified');
+  });
+
+  it('re-arms the window on rejoin rather than using the original join time', async () => {
+    await seedJoiner(ctx, 'rejoiner', 5); // long overdue by the first join
+    await ctx.db.recordAccessEvent({
+      telegramUserId: 'rejoiner',
+      action: 'joined_group',
+      newState: 'member',
+      reason: 'test',
+      at: hoursAgo(0.1), // but rejoined moments ago
+    });
+
+    const summary = await runScheduledRecheck(ctx);
+
+    expect(summary.unverifiedRemoved).toBe(0);
+    expect(ctx.fakeTelegram.removed).toHaveLength(0);
+  });
+
+  it('sends a distinct notification, not the "lost ownership" revoke message', async () => {
+    await seedJoiner(ctx, 'squatter', 2);
+    await runScheduledRecheck(ctx);
+
+    const sent = ctx.fakeTelegram.messages.find((m) => m.chatId === 'squatter');
+    expect(sent?.text).toMatch(/joined without completing wallet verification/);
+    expect(sent?.text).not.toMatch(/no longer holds a qualifying NFT/);
   });
 });

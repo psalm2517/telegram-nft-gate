@@ -92,7 +92,7 @@ describe('worker routing', () => {
     const res = await SELF.fetch('https://gate.example/verify');
     expect(res.status).toBe(200);
     const html = await res.text();
-    // Served by this same Worker via the ASSETS binding — no Pages involved.
+    // Served by this same Worker via the ASSETS binding: no Pages involved.
     expect(html).toContain('<div id="root">');
     expect(html).toContain('/assets/');
   });

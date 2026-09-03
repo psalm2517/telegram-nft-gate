@@ -19,7 +19,7 @@ async function resetKvState(): Promise<void> {
   await env.KV.delete(`admin-menu-set:${ADMIN_ID}`);
   await env.KV.delete('config:telegram_group_title');
   // The collection-name cache is keyed by collection id, which is shared
-  // across test files (same TEST_COLLECTION/NFT_COLLECTION_ID everywhere) —
+  // across test files (same TEST_COLLECTION/NFT_COLLECTION_ID everywhere), so
   // clear it so another file's cached name can't leak into these tests.
   await env.KV.delete('cache:collection_name:J7rxtKmEpNJEtrfkagiTF1gsmLyVus6BQZFY4ouBkeMG');
   const rateLimitKeys = await env.KV.list({ prefix: 'rl:' });
@@ -40,7 +40,7 @@ const messageUpdate = (text: string, userId: string) => ({
 
 /**
  * Drives the bot directly via bot.handleUpdate, bypassing the HTTP webhook
- * route. This is what lets telegramGroupId be overridden per test — the
+ * route. This is what lets telegramGroupId be overridden per test: the
  * webhook-based integration tests share one worker whose env is fixed for
  * the whole file.
  */

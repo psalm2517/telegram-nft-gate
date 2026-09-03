@@ -196,7 +196,7 @@ describe('replay and substitution protection', () => {
   });
 
   it('rejects challenge substitution: signing another user\'s challenge text', async () => {
-    // Victim's challenge, attacker's own valid nonce — the message no longer
+    // Victim's challenge, attacker's own valid nonce: the message no longer
     // matches what the server stored for the attacker's nonce.
     const victim = await issueChallenge(ctx, '111');
     const attacker = await issueChallenge(ctx, '222');

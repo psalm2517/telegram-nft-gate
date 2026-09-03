@@ -68,7 +68,7 @@ export class OwnershipChecker {
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     // Bound explicitly: storing the bare global `fetch` and later invoking it
     // as `this.fetchImpl(...)` calls it with the wrong `this` receiver, which
-    // Workers' fetch rejects with "Illegal invocation" — this was silently
+    // Workers' fetch rejects with "Illegal invocation": this was silently
     // turning every single ownership check into INDETERMINATE.
     this.fetchImpl = options.fetchImpl ?? fetch.bind(globalThis);
   }
@@ -166,10 +166,10 @@ export class OwnershipChecker {
   }
 
   /**
-   * Setup-time validation (CLAUDE.md §5): confirm the configured collection id is
+   * Setup-time validation: confirm the configured collection id is
    * a real, certified on-chain collection, and that sample mints really belong to it.
    *
-   * This never substitutes or discovers a different id — it only reports agreement
+   * This never substitutes or discovers a different id: it only reports agreement
    * or disagreement, so a misconfiguration fails loudly instead of silently gating
    * on the wrong collection.
    */
@@ -237,7 +237,7 @@ export class OwnershipChecker {
 
   /**
    * The collection's own display name (e.g. "Solana Business Frogs"), for
-   * de-genericizing user-facing text — "hold an NFT from {name}" instead of
+   * de-genericizing user-facing text: "hold an NFT from {name}" instead of
    * "hold a qualifying NFT". Derived from the chain, not operator config, so
    * it needs nothing beyond NFT_COLLECTION_ID to work. Returns null on any
    * failure; callers should fall back to generic phrasing, never block on it.

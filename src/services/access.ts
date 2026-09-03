@@ -115,14 +115,14 @@ export class AccessService {
     // left voluntarily: leaving the group is not a tracked transition (see the
     // bot's chat_member handler), so status stays `eligible` either way. Only
     // Telegram's own membership check can distinguish "already inside, no link
-    // needed" from "eligible but outside, needs a fresh link to get back in" —
+    // needed" from "eligible but outside, needs a fresh link to get back in",
     // including for someone re-verifying who was eligible all along.
     const membership = await this.telegram.isMember(user.telegram_user_id);
     if (membership.ok && membership.value) {
       decision.notify = wasAlreadyEligible
-        ? 'Ownership reconfirmed. You are already verified and your access is active — no new invite link needed.'
+        ? 'Ownership reconfirmed. You are already verified and your access is active. No new invite link needed.'
         : previousStatus === 'grace'
-          ? 'Ownership confirmed again — your access is restored. No action needed.'
+          ? 'Ownership confirmed again. Your access is restored. No action needed.'
           : 'Ownership confirmed. Your access is active.';
       return decision;
     }
@@ -187,7 +187,7 @@ export class AccessService {
       };
     }
 
-    // Already in grace — revoke only once the window has actually closed.
+    // Already in grace: revoke only once the window has actually closed.
     const startedAt = user.grace_period_started_at ?? at;
     const deadline = addHours(startedAt, this.config.gracePeriodHours);
     if (!isBefore(deadline, at)) {
@@ -272,6 +272,76 @@ export class AccessService {
       notify:
         'Your access has been removed because your wallet no longer holds a qualifying NFT. ' +
         'You can regain access any time with /verify.',
+    };
+  }
+
+  /**
+   * Remove a member who joined the group but never completed verification
+   * within `joinVerificationHours`. Distinct from `revoke`: this user never
+   * held eligibility to begin with, so there is no "lost ownership" to report,
+   * and the audit trail should say so plainly rather than reusing a message
+   * that implies they once verified.
+   */
+  async removeUnverifiedJoiner(user: UserRow, at: Iso): Promise<AccessDecision> {
+    const previousStatus = user.status;
+
+    // Migration mode protects pre-existing members from automated removal;
+    // it does not apply to this reason narrowly, but the blanket "nothing is
+    // auto-removed while migration mode is on" guarantee still holds here too.
+    if (this.config.migrationMode && user.is_legacy_member === 1) {
+      await this.db.recordAccessEvent({
+        telegramUserId: user.telegram_user_id,
+        action: 'removal_skipped_migration_mode',
+        previousState: previousStatus,
+        newState: previousStatus,
+        reason: 'join_verification_window_expired',
+      });
+      return {
+        previousStatus,
+        newStatus: previousStatus,
+        changed: false,
+        ownership: 'NOT_OWNED',
+        reason: 'migration_mode_protected',
+      };
+    }
+
+    const removal = await this.telegram.removeMember(user.telegram_user_id);
+
+    if (!removal.ok) {
+      await this.db.recordAccessEvent({
+        telegramUserId: user.telegram_user_id,
+        action: 'removal_failed',
+        previousState: previousStatus,
+        newState: previousStatus,
+        reason: `join_verification_window_expired:${removal.error}`,
+      });
+      return {
+        previousStatus,
+        newStatus: previousStatus,
+        changed: false,
+        ownership: 'NOT_OWNED',
+        reason: `removal_failed:${removal.error}`,
+      };
+    }
+
+    await this.db.updateUser(user.telegram_user_id, { status: 'revoked', revoked_at: at });
+    await this.db.recordAccessEvent({
+      telegramUserId: user.telegram_user_id,
+      action: 'removed_unverified_join',
+      previousState: previousStatus,
+      newState: 'revoked',
+      reason: 'join_verification_window_expired',
+    });
+
+    return {
+      previousStatus,
+      newStatus: 'revoked',
+      changed: true,
+      ownership: 'NOT_OWNED',
+      reason: 'join_verification_window_expired',
+      notify:
+        'You were removed because you joined without completing wallet verification in time. ' +
+        'Message the bot and run /verify for a fresh invite link.',
     };
   }
 

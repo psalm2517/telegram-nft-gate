@@ -1,5 +1,5 @@
 /**
- * Setup-time validation of NFT_COLLECTION_ID (CLAUDE.md §5).
+ * Setup-time validation of NFT_COLLECTION_ID.
  *
  * Confirms, against the live DAS API, that:
  *   1. the configured id resolves to a certified on-chain *collection* asset, and

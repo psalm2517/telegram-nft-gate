@@ -135,11 +135,18 @@ on-demand via `/adminrecheck`.
 
 ## Scheduled rechecks
 
-The cron handler (`src/scheduled.ts`) makes two passes:
+The cron handler (`src/scheduled.ts`) makes three passes:
 
 1. Users whose last check is older than `RECHECK_INTERVAL_HOURS`.
 2. Grace-period users whose window has closed, so revocation lands on time even
    if their ownership check is not otherwise due.
+3. Members who joined but never completed verification within
+   `JOIN_VERIFICATION_HOURS`, tracked via the `joined_group` `access_events`
+   entry the `chat_member` handler writes on every join. A single-use invite
+   link limits a leak to one join, but does not bind that join to the
+   Telegram account it was minted for; whoever actually used it still has to
+   verify, or gets removed here. Migration mode protects legacy members from
+   this pass exactly as it does from ordinary revocation.
 
 Work is capped at `RECHECK_BATCH_SIZE` per invocation, ordered oldest-check-first
 so nobody is starved. One failing row cannot abort the batch. Expired nonces are

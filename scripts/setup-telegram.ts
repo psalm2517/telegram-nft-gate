@@ -5,14 +5,14 @@
  * no way to talk to you until Telegram knows where to send updates, so this
  * has to run once, from outside, after the Worker is deployed.
  *
- * Everything after this — which group to gate, admin actions — is just
+ * Everything after this: which group to gate, admin actions: is just
  * messaging the bot. Add it to your group as admin; it will detect that and
  * DM your admins to confirm via /setup. See docs/telegram-setup.md.
  *
  * Usage:
  *   TELEGRAM_BOT_TOKEN=... node --experimental-transform-types scripts/setup-telegram.ts <worker-url>
  *
- * Nothing here touches Cloudflare — it only talks to the Telegram Bot API and
+ * Nothing here touches Cloudflare: it only talks to the Telegram Bot API and
  * prints the webhook secret you still need to paste into the dashboard (or
  * .dev.vars locally).
  */
@@ -48,7 +48,7 @@ function randomSecret(): string {
 async function main() {
   console.log('Checking bot token...');
   const me = await call<{ id: number; username: string }>('getMe');
-  console.log(`  OK — this is @${me.username} (id ${me.id})\n`);
+  console.log(`  OK: this is @${me.username} (id ${me.id})\n`);
 
   const webhookUrl = `${workerUrlArg!.replace(/\/+$/, '')}/telegram/webhook`;
   const existingSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
@@ -80,7 +80,7 @@ async function main() {
   console.log('  Webhook is live and error-free.\n');
   console.log(existingSecret ? 'Done.' : `Set TELEGRAM_WEBHOOK_SECRET=${secret} (dashboard or .dev.vars).`);
   console.log('\nNext: message the bot /start, then add it to your group as admin');
-  console.log('(Invite Users via Link, Ban Users) — it will DM your admins to confirm the group.');
+  console.log('(Invite Users via Link, Ban Users): it will DM your admins to confirm the group.');
 }
 
 main().catch((err) => {

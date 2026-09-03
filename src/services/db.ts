@@ -154,6 +154,32 @@ export class Database {
     return results ?? [];
   }
 
+  /**
+   * Members who joined the group but never completed verification, whose join
+   * happened before `cutoff`. A single-use invite link limits a leak to one
+   * join, but does not bind that join to the Telegram account it was minted
+   * for; whoever actually used it still has to verify, or ends up here.
+   */
+  async listOverdueUnverifiedJoiners(cutoff: Iso, limit: number): Promise<UserRow[]> {
+    const { results } = await this.db
+      .prepare(
+        `SELECT u.* FROM users u
+          JOIN (
+            SELECT telegram_user_id, MAX(created_at) AS joined_at
+            FROM access_events
+            WHERE action = 'joined_group'
+            GROUP BY telegram_user_id
+          ) j ON j.telegram_user_id = u.telegram_user_id
+          WHERE u.status = 'unverified'
+            AND j.joined_at < ?
+          ORDER BY j.joined_at ASC
+          LIMIT ?`,
+      )
+      .bind(cutoff, limit)
+      .all<UserRow>();
+    return results ?? [];
+  }
+
   async searchUsers(query: string | null, status: string | null, limit = 50, offset = 0) {
     const clauses: string[] = [];
     const binds: unknown[] = [];
@@ -290,6 +316,7 @@ export class Database {
     previousState?: string | null;
     newState?: string | null;
     reason?: string | null;
+    at?: Iso;
   }): Promise<void> {
     await this.db
       .prepare(
@@ -299,7 +326,7 @@ export class Database {
       )
       .bind(
         randomId(), e.telegramUserId, e.action,
-        e.previousState ?? null, e.newState ?? null, e.reason ?? null, nowIso(),
+        e.previousState ?? null, e.newState ?? null, e.reason ?? null, e.at ?? nowIso(),
       )
       .run();
   }

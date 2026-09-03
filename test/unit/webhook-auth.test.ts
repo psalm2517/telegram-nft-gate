@@ -13,7 +13,7 @@ describe('telegram webhook authentication', () => {
   /**
    * The webhook must fail closed. Skipping the check when no secret is
    * configured would let anyone who guesses this URL forge an update carrying
-   * an admin's `from.id` and drive the admin commands — while real Telegram
+   * an admin's `from.id` and drive the admin commands: while real Telegram
    * traffic kept working, so nothing would look broken.
    */
   it('refuses every update when no webhook secret is configured', async () => {

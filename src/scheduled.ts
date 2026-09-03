@@ -8,6 +8,7 @@ export interface RecheckSummary {
   restored: number;
   revoked: number;
   indeterminate: number;
+  unverifiedRemoved: number;
   noncesPurged: number;
   errors: number;
 }
@@ -15,13 +16,16 @@ export interface RecheckSummary {
 /**
  * Scheduled ownership re-check (Cron Trigger).
  *
- * Two passes:
+ * Three passes:
  *  1. users whose last check is older than RECHECK_INTERVAL_HOURS
  *  2. grace-period users whose window has closed, so revocation happens on time
  *     even if their ownership check is not yet due
+ *  3. members who joined but never completed verification within
+ *     JOIN_VERIFICATION_HOURS: a single-use invite link limits a leak to one
+ *     join, but not to the account it was minted for, so this is the backstop
  *
  * Work is bounded by RECHECK_BATCH_SIZE per invocation to stay inside Worker
- * limits; the queue is ordered oldest-first so nobody is starved.
+ * limits; each queue is ordered oldest-first so nobody is starved.
  */
 export async function runScheduledRecheck(ctx: AppContext): Promise<RecheckSummary> {
   const summary: RecheckSummary = {
@@ -31,6 +35,7 @@ export async function runScheduledRecheck(ctx: AppContext): Promise<RecheckSumma
     restored: 0,
     revoked: 0,
     indeterminate: 0,
+    unverifiedRemoved: 0,
     noncesPurged: 0,
     errors: 0,
   };
@@ -84,6 +89,30 @@ export async function runScheduledRecheck(ctx: AppContext): Promise<RecheckSumma
       // One bad row must not take down the whole scheduled run.
       summary.errors++;
       console.error('recheck failed', { user: user.telegram_user_id, error: String(err) });
+    }
+  }
+
+  const joinCutoff = addHours(at, -ctx.config.joinVerificationHours);
+  const overdueJoiners = await ctx.db.listOverdueUnverifiedJoiners(
+    joinCutoff,
+    ctx.config.recheckBatchSize,
+  );
+
+  for (const user of overdueJoiners) {
+    try {
+      const decision = await ctx.access.removeUnverifiedJoiner(user, at);
+      if (decision.changed) {
+        summary.unverifiedRemoved++;
+        if (decision.notify) {
+          await ctx.telegram.sendMessage(user.telegram_user_id, decision.notify);
+        }
+      }
+    } catch (err) {
+      summary.errors++;
+      console.error('unverified-joiner removal failed', {
+        user: user.telegram_user_id,
+        error: String(err),
+      });
     }
   }
 

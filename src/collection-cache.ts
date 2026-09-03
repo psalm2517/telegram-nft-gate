@@ -4,7 +4,7 @@ import type { OwnershipChecker } from './services/ownership.js';
  * KV-cached lookup of the collection's on-chain display name.
  *
  * Every /start, /verify and page load would otherwise cost a DAS round-trip
- * just to render text — this makes that a cache hit after the first request.
+ * just to render text: this makes that a cache hit after the first request.
  * Successes cache for a week (collection names essentially never change);
  * failures cache briefly, so a transient DAS outage doesn't permanently
  * disable the friendly name for an hour of retries.

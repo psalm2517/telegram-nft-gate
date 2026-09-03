@@ -147,7 +147,7 @@ export function Verify() {
 
       {connectingTo && (
         <div className="notice warn">
-          Waiting on {connectingTo} — a popup should have opened. If you don't see it, check
+          Waiting on {connectingTo}. A popup should have opened. If you don't see it, check
           your browser's extension icons (often top-right of the address bar); it can open there
           instead of on this page.
         </div>
@@ -257,7 +257,7 @@ export function Verify() {
 
       {step === 'done' && (
         <div className="card">
-          <p>Return to your Telegram chat with the bot — your invite link is waiting there.</p>
+          <p>Return to your Telegram chat with the bot: your invite link is waiting there.</p>
           <p className="muted">
             The invite link is single-use and expires shortly, so use it soon.
           </p>
@@ -266,7 +266,7 @@ export function Verify() {
 
       {config && (
         <p className="muted mono" style={{ marginTop: 24 }}>
-          Collection: {config.collectionName ? `${config.collectionName} — ` : ''}
+          Collection: {config.collectionName ? `${config.collectionName} · ` : ''}
           {config.collectionId}
         </p>
       )}

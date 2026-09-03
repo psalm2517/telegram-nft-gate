@@ -3,7 +3,7 @@
  *
  * KV is eventually consistent, so this is a best-effort throttle for abuse
  * control rather than a hard quota. Correctness of the verification flow never
- * depends on it — replay protection lives in D1's single-use nonce.
+ * depends on it: replay protection lives in D1's single-use nonce.
  */
 export interface RateLimitResult {
   allowed: boolean;

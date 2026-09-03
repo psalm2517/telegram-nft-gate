@@ -19,7 +19,7 @@ export interface TelegramClientOptions {
   timeoutMs?: number;
   /**
    * Called when Telegram reports the configured group was upgraded to a
-   * supergroup (a routine, unprompted event — happens automatically past a
+   * supergroup (a routine, unprompted event: happens automatically past a
    * member-count threshold, or when certain admin features are first used).
    * The chat id changes permanently when this happens. Wire this to persist
    * the new id (e.g. to KV), or every group-scoped call keeps failing after
@@ -44,7 +44,7 @@ export class TelegramClient {
   private groupId: string;
 
   constructor(private readonly options: TelegramClientOptions) {
-    // Bound explicitly — see the identical fix/comment in services/ownership.ts.
+    // Bound explicitly: see the identical fix/comment in services/ownership.ts.
     // Storing the bare global `fetch` and calling it as `this.fetchImpl(...)`
     // throws "Illegal invocation" in Workers, since that call syntax rebinds
     // `this` away from globalThis.
@@ -76,7 +76,7 @@ export class TelegramClient {
       if (!json.ok) {
         const migrateTo = json.parameters?.migrate_to_chat_id;
         // Only follow the migration for a call that was actually scoped to
-        // *our* configured group — an unrelated failure (e.g. getChat on some
+        // *our* configured group: an unrelated failure (e.g. getChat on some
         // other chat_id during /setup) must not overwrite it.
         if (
           migrateTo !== undefined &&
@@ -150,7 +150,7 @@ export class TelegramClient {
   }
 
   /**
-   * Look up an arbitrary chat by id — unlike every other method here, this is
+   * Look up an arbitrary chat by id: unlike every other method here, this is
    * not scoped to the configured group, because it exists to validate a chat
    * *before* it becomes the configured group (see /setup group <id>).
    */

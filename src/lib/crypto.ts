@@ -34,7 +34,7 @@ export function isValidSolanaAddress(address: string): boolean {
 /**
  * Verify an ed25519 signature over `message` by `address`.
  *
- * Returns false — never throws — for any malformed input, so a caller cannot
+ * Returns false, never throws, for any malformed input, so a caller cannot
  * distinguish "bad encoding" from "bad signature" and cannot use exceptions as
  * an oracle.
  */

@@ -34,9 +34,9 @@ const VERIFY_LINK_TTL_SECONDS = 15 * 60;
 const HELP_TEXT = [
   'Available commands:',
   '',
-  '/verify — connect a Solana wallet and prove NFT ownership',
-  '/status — show your current verification and access status',
-  '/help — show this message',
+  '/verify: connect a Solana wallet and prove NFT ownership',
+  '/status: show your current verification and access status',
+  '/help: show this message',
   '',
   'This bot will never ask for your seed phrase, private key, or any transaction.',
   'Verification is a plain message signature that moves no funds.',
@@ -53,12 +53,12 @@ const HELP_TEXT = [
 const ADMIN_HELP_TEXT = [
   'Admin commands:',
   '',
-  '/setup — check or configure which group this bot gates',
-  '/adminstats — membership counts and migration progress',
-  '/adminusers <query> — search by Telegram id, username or wallet',
-  '/adminrecheck <telegram_id> — run a live ownership check on one user',
-  '/adminrevoke <telegram_id> [reason] — remove a user\'s access',
-  '/adminrestore <telegram_id> — restore access after re-confirming ownership',
+  '/setup: check or configure which group this bot gates',
+  '/adminstats: membership counts and migration progress',
+  '/adminusers <query>: search by Telegram id, username or wallet',
+  '/adminrecheck <telegram_id>: run a live ownership check on one user',
+  '/adminrevoke <telegram_id> [reason]: remove a user\'s access',
+  '/adminrestore <telegram_id>: restore access after re-confirming ownership',
   '',
   'There is no bypass: restore only succeeds if the linked wallet currently',
   'holds a qualifying NFT. Every action here is written to the audit log.',
@@ -66,7 +66,7 @@ const ADMIN_HELP_TEXT = [
 
 /**
  * Real Telegram command definitions, distinct from the free-text HELP_TEXT
- * above — these are what populate the "/" autocomplete menu in a client.
+ * above: these are what populate the "/" autocomplete menu in a client.
  * Admin commands are registered only in the scope of an admin's own private
  * chat (see registerAdminCommandMenu below), never bot-wide, so a non-admin's
  * menu never lists them.
@@ -94,7 +94,7 @@ function formatUserLine(u: UserRow): string {
   const who = u.telegram_username ? `@${u.telegram_username}` : u.telegram_user_id;
   const wallet = u.wallet_address ? shortWallet(u.wallet_address) : 'no wallet';
   const legacy = u.is_legacy_member ? ' [legacy]' : '';
-  return `${u.telegram_user_id} (${who}) — ${u.status} — ${wallet}${legacy}`;
+  return `${u.telegram_user_id} (${who}) · ${u.status} · ${wallet}${legacy}`;
 }
 
 export function createBot(deps: BotDeps, botInfo?: UserFromGetMe): Bot {
@@ -113,7 +113,7 @@ export function createBot(deps: BotDeps, botInfo?: UserFromGetMe): Bot {
 
   /**
    * Registers Telegram's native "/" command menu for one admin's private chat
-   * with the bot — scoped there only, so this is invisible to everyone else.
+   * with the bot: scoped there only, so this is invisible to everyone else.
    * Without this, admin commands work but are effectively undiscoverable: an
    * admin has to already know to type e.g. /adminhelp. Fires once per admin
    * (cached in KV) rather than on every message.
@@ -150,7 +150,7 @@ export function createBot(deps: BotDeps, botInfo?: UserFromGetMe): Bot {
    *
    * If no group has been confirmed yet (see /setup), there is nothing to
    * grant access to, so this refuses instead of handing out a link that leads
-   * nowhere — with a different message for admins (who can fix it) than for
+   * nowhere: with a different message for admins (who can fix it) than for
    * everyone else (who just needs to wait).
    */
   async function replyWithVerifyLink(ctx: Context, isStart: boolean): Promise<void> {
@@ -165,7 +165,7 @@ export function createBot(deps: BotDeps, botInfo?: UserFromGetMe): Bot {
       if (isAdmin(telegramUserId)) {
         await ctx.reply(
           [
-            `${deps.config.appName} isn't fully set up yet — no group is configured.`,
+            `${deps.config.appName} isn't fully set up yet: no group is configured.`,
             '',
             'Add me to your group as admin (Invite Users via Link, Ban Users),',
             "then reply /setup confirm here once I've messaged you. Run /setup",
@@ -241,7 +241,7 @@ export function createBot(deps: BotDeps, botInfo?: UserFromGetMe): Bot {
     if (!(await privateOnly(ctx))) return;
     const from = ctx.from;
     const admin = from && isAdmin(String(from.id));
-    await ctx.reply(admin ? `${HELP_TEXT}\n\nYou are an admin — send /adminhelp for admin commands.` : HELP_TEXT);
+    await ctx.reply(admin ? `${HELP_TEXT}\n\nYou are an admin. Send /adminhelp for admin commands.` : HELP_TEXT);
   });
 
   bot.command('verify', async (ctx) => {
@@ -267,7 +267,7 @@ export function createBot(deps: BotDeps, botInfo?: UserFromGetMe): Bot {
       return;
     }
 
-    // /status performs a live ownership check (CLAUDE.md §11).
+    // /status performs a live ownership check.
     const decision = await deps.access.recheckUser(user, 'status_command');
     const lines = [`Wallet: ${shortWallet(user.wallet_address)}`];
 
@@ -279,16 +279,16 @@ export function createBot(deps: BotDeps, botInfo?: UserFromGetMe): Bot {
         'Your access has not been changed.',
       );
     } else if (decision.newStatus === 'eligible') {
-      lines.push('Status: eligible — you currently hold a qualifying NFT.');
+      lines.push('Status: eligible. You currently hold a qualifying NFT.');
     } else if (decision.newStatus === 'grace') {
       lines.push(
-        'Status: grace period — no qualifying NFT found in this wallet.',
+        'Status: grace period. No qualifying NFT found in this wallet.',
         `You have ${deps.config.gracePeriodHours} hour(s) from when the loss was detected`,
         'to restore ownership or verify a different wallet with /verify.',
       );
     } else {
       lines.push(
-        'Status: no access — this wallet does not hold a qualifying NFT.',
+        'Status: no access. This wallet does not hold a qualifying NFT.',
         'Use /verify to link a wallet that does.',
       );
     }
@@ -307,7 +307,7 @@ export function createBot(deps: BotDeps, botInfo?: UserFromGetMe): Bot {
   // ---------------------------------------------------------------- admin --
 
   /**
-   * The single entry point for "which group does this gate?" — status when
+   * The single entry point for "which group does this gate?": status when
    * called bare, confirms an auto-detected group, or pins one directly by id.
    * This is what replaces pre-deploy TELEGRAM_GROUP_ID discovery: add the bot
    * to a group and talk to it from here, nothing else required.
@@ -329,7 +329,7 @@ export function createBot(deps: BotDeps, botInfo?: UserFromGetMe): Bot {
       if (pending && pending.id !== configuredId) {
         lines.push(
           '',
-          `Pending: "${pending.title}" (${pending.id}) — detected when I was added to it.`,
+          `Pending: "${pending.title}" (${pending.id}). Detected when I was added to it.`,
           'Run /setup confirm to use this group, or ignore this if it was unexpected.',
         );
       } else if (!configuredId) {
@@ -354,7 +354,7 @@ export function createBot(deps: BotDeps, botInfo?: UserFromGetMe): Bot {
       const pending = await getPendingGroup(deps.kv);
       if (!pending) {
         await ctx.reply(
-          'Nothing pending. Add me to the group you want to gate first — I\'ll message you here once I am.',
+          'Nothing pending. Add me to the group you want to gate first: I\'ll message you here once I am.',
         );
         return;
       }
@@ -502,7 +502,7 @@ export function createBot(deps: BotDeps, botInfo?: UserFromGetMe): Bot {
   });
 
   /**
-   * Restore is deliberately not an unconditional grant (CLAUDE.md §13): it
+   * Restore is deliberately not an unconditional grant: it
    * re-runs the same ownership check everyone else goes through, and only
    * restores access if that check comes back OWNED.
    */

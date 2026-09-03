@@ -13,6 +13,7 @@ export interface Env {
   CHALLENGE_TTL_SECONDS?: string;
   RECHECK_BATCH_SIZE?: string;
   RECHECK_INTERVAL_HOURS?: string;
+  JOIN_VERIFICATION_HOURS?: string;
   PUBLIC_BASE_URL?: string;
 
   // secrets
@@ -80,6 +81,13 @@ export const configSchema = z.object({
   challengeTtlSeconds: z.number().int().min(30).max(3600),
   recheckBatchSize: z.number().int().min(1).max(1000),
   recheckIntervalHours: z.number().int().min(1).max(24 * 30),
+  /**
+   * How long a member may stay in the group without completing verification
+   * before being removed. Closes a gap a single-use invite link cannot: the
+   * link limits a leak to one join, but does not bind that join to the
+   * Telegram account it was minted for. See scheduled.ts.
+   */
+  joinVerificationHours: z.number().int().min(0).max(24 * 30),
   publicBaseUrl: z.string().url().optional(),
 }).refine((c) => Boolean(c.heliusApiKey || c.dasEndpoint), {
   message: 'HELIUS_API_KEY is required unless DAS_ENDPOINT is set to a different DAS-compatible provider',
@@ -89,7 +97,7 @@ export const configSchema = z.object({
 export type Config = Omit<z.infer<typeof configSchema>, 'telegramGroupId'> & {
   dasEndpoint: string;
   /**
-   * Always a string once loadConfig returns — '' when no group has been
+   * Always a string once loadConfig returns: '' when no group has been
    * configured or confirmed yet. context.ts may still overwrite this with a
    * value confirmed at runtime via KV; see createContext.
    */
@@ -118,12 +126,13 @@ export function loadConfig(env: Env): Config {
       .filter(Boolean),
     sessionSecret: env.SESSION_SECRET,
     gracePeriodHours: intFromString(24, 0, 24 * 365).parse(env.ACCESS_GRACE_PERIOD_HOURS),
-    // Defaults to true — an unconfigured deployment must not silently start
-    // removing a community's existing members (CLAUDE.md §14).
+    // Defaults to true: an unconfigured deployment must not silently start
+    // removing a community's existing members.
     migrationMode: boolish(true).parse(env.MIGRATION_MODE),
     challengeTtlSeconds: intFromString(300, 30, 3600).parse(env.CHALLENGE_TTL_SECONDS),
     recheckBatchSize: intFromString(100, 1, 1000).parse(env.RECHECK_BATCH_SIZE),
     recheckIntervalHours: intFromString(12, 1, 24 * 30).parse(env.RECHECK_INTERVAL_HOURS),
+    joinVerificationHours: intFromString(1, 0, 24 * 30).parse(env.JOIN_VERIFICATION_HOURS),
     publicBaseUrl: env.PUBLIC_BASE_URL || undefined,
   });
 

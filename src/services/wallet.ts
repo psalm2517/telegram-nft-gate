@@ -17,7 +17,7 @@ export interface ChallengeParts {
  * signature captured for one user/wallet/app cannot be replayed for another:
  * swapping any of them changes the message and invalidates the signature.
  *
- * This is a plain message signature — never a transaction, and never a request
+ * This is a plain message signature: never a transaction, and never a request
  * for a key or seed phrase.
  */
 export function buildChallenge(parts: ChallengeParts): string {
@@ -49,7 +49,7 @@ export interface SignatureCheckInput {
  * Verify that `walletAddress` produced `signatureBase58` over `challenge`.
  *
  * The challenge argument must come from the server's own record, not from the
- * request body — otherwise an attacker could sign a message of their choosing.
+ * request body: otherwise an attacker could sign a message of their choosing.
  */
 export function verifyWalletSignature(input: SignatureCheckInput): boolean {
   if (!isValidSolanaAddress(input.walletAddress)) return false;

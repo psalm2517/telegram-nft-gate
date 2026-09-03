@@ -216,7 +216,7 @@ describe('OwnershipChecker.validateCollection', () => {
     }).validateCollection(['mintA']);
 
     expect(report.ok).toBe(false);
-    // The reported id must still be the configured one — never a discovered replacement.
+    // The reported id must still be the configured one: never a discovered replacement.
     expect(report.collectionId).toBe(TEST_COLLECTION);
     expect(report.problems.join(' ')).toMatch(/does not group to/);
   });
@@ -266,7 +266,7 @@ describe('OwnershipChecker.getCollectionName', () => {
 
 describe('OwnershipChecker default fetchImpl (regression)', () => {
   // Every test above overrides fetchImpl, so none of them exercised this
-  // path — which is exactly how a real bug slipped through: storing the bare
+  // path, which is exactly how a real bug slipped through: storing the bare
   // global `fetch` and calling it as `this.fetchImpl(...)` throws "Illegal
   // invocation" in Workers (wrong `this` receiver), silently turning every
   // ownership check into INDETERMINATE regardless of which RPC was configured.
@@ -281,12 +281,12 @@ describe('OwnershipChecker default fetchImpl (regression)', () => {
         apiKey: '',
         collectionId: TEST_COLLECTION,
         endpoint: 'https://api.mainnet-beta.solana.com',
-        // fetchImpl deliberately omitted — exercises the real default.
+        // fetchImpl deliberately omitted: exercises the real default.
       });
       const result = await checker.ownsAtLeastOne('11111111111111111111111111111111');
 
       // The public RPC may itself reject a sandboxed test runner's IP (rate
-      // limiting, egress policy) — that is a legitimate http_xxx/rate_limited
+      // limiting, egress policy): that is a legitimate http_xxx/rate_limited
       // outcome, proof the fetch call itself went through. Only a thrown
       // "Illegal invocation" (wrong `this` receiver on the bare global fetch)
       // is the regression this test guards against, and that always shows up

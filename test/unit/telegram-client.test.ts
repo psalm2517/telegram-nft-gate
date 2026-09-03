@@ -3,7 +3,7 @@ import { TelegramClient } from '../../src/services/telegram.js';
 
 describe('TelegramClient default fetchImpl (regression)', () => {
   // Every other test that exercises TelegramClient goes through bot.test.ts's
-  // stubbed global fetch, which — critically — does NOT reproduce this bug:
+  // stubbed global fetch, which (critically) does NOT reproduce this bug:
   // a plain stub function has no `this`-receiver requirement, so it masked
   // the fact that the *real* Workers fetch throws "Illegal invocation" when
   // stored as a bare reference and called as `this.fetchImpl(...)`. This test
@@ -18,13 +18,13 @@ describe('TelegramClient default fetchImpl (regression)', () => {
       const client = new TelegramClient({
         botToken: 'not-a-real-token:invalid',
         groupId: '-1000000000000',
-        // fetchImpl deliberately omitted — exercises the real default.
+        // fetchImpl deliberately omitted: exercises the real default.
       });
       const result = await client.getMe();
 
       // An invalid token fails authentication (a real HTTP response from
       // Telegram), which is only reachable if the fetch call itself
-      // succeeded — proof the binding is correct. A thrown "Illegal
+      // succeeded: proof the binding is correct. A thrown "Illegal
       // invocation" would instead surface as { error: 'network_error' }.
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.error).not.toBe('network_error');
@@ -104,7 +104,7 @@ describe('TelegramClient group migration handling', () => {
       groupId: '-100111',
       fetchImpl: async (_input, init) => {
         const body = JSON.parse(String(init?.body ?? '{}'));
-        // getChat targets an arbitrary id, not the configured group — a
+        // getChat targets an arbitrary id, not the configured group: a
         // migration reported for it must not overwrite the real group id.
         if (body.chat_id === '-999999') return MIGRATE_RESPONSE(-100222);
         return new Response(JSON.stringify({ ok: true, result: { status: 'member' } }));

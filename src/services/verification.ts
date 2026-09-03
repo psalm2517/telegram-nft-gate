@@ -38,7 +38,7 @@ const FAILURE_MESSAGES: Record<VerificationFailure, string> = {
   invalid_signature: 'The signature did not match the wallet address.',
   wallet_bound_to_other_user: 'This wallet is already linked to a different Telegram account.',
   ownership_indeterminate:
-    'We could not reach the Solana indexer to confirm ownership. Please try again shortly — ' +
+    'We could not reach the Solana indexer to confirm ownership. Please try again shortly: ' +
     'this is not a statement about your wallet.',
   not_a_holder: 'This wallet does not currently hold a qualifying NFT from the collection.',
 };
@@ -122,7 +122,7 @@ export class VerificationService {
       return fail('unknown_nonce');
     }
 
-    // Bindings first — these say *who* the challenge was for.
+    // Bindings first: these say *who* the challenge was for.
     if (record.telegram_user_id !== input.telegramUserId) {
       await this.logFailure(input, 'telegram_user_mismatch');
       return fail('telegram_user_mismatch');

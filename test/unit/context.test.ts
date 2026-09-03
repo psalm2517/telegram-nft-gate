@@ -26,7 +26,7 @@ describe('createContext group id resolution', () => {
     expect(ctx.config.telegramGroupId).toBe('');
   });
 
-  it('does not throw when unconfigured — misconfiguration only bites when a group action is attempted', async () => {
+  it('does not throw when unconfigured: misconfiguration only bites when a group action is attempted', async () => {
     await expect(createContext(baseEnv({ TELEGRAM_GROUP_ID: undefined }))).resolves.toBeDefined();
   });
 });

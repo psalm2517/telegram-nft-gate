@@ -7,7 +7,7 @@ import './styles.css';
  * One page. There is no client-side router because there is only one route:
  * the Worker's `not_found_handling: "single-page-application"` sends every
  * non-API path here, and `/verify` is the only link the bot ever sends out.
- * Administration is entirely bot commands — see src/bot/bot.ts.
+ * Administration is entirely bot commands: see src/bot/bot.ts.
  */
 function App() {
   const path = window.location.pathname;
