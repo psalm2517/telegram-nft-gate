@@ -2,16 +2,15 @@
 
 The whole path is: create two Cloudflare resources, put their ids in
 `wrangler.jsonc`, set six secrets, migrate, deploy, point Telegram at it. No CI
-setup, no GitHub secrets, no dashboard build configuration — those are optional
+setup, no GitHub secrets, no dashboard build configuration: those are optional
 extras covered at the end, and most deployments never need them.
 
 ## Prerequisites
 
 - Node.js ≥ 22.12 and pnpm
 - A Cloudflare account (`pnpm exec wrangler login`)
-- A Telegram bot and group — see [`telegram-setup.md`](telegram-setup.md)
-- Optionally a Helius API key — <https://dashboard.helius.dev>. Without one,
-  ownership checks use the public Solana RPC.
+- A Telegram bot and group: see [`telegram-setup.md`](telegram-setup.md)
+- A Helius API key: <https://dashboard.helius.dev>
 
 ## 1. Create resources
 
@@ -24,7 +23,7 @@ pnpm exec wrangler kv namespace create KV
 ```
 
 Each command prints an id. Put them in `wrangler.jsonc`, replacing the zero
-placeholders — `database_id` from the first, the KV `id` from the second. Set
+placeholders: `database_id` from the first, the KV `id` from the second. Set
 `name` too if you want the Worker called something other than
 `telegram-nft-gate`.
 
@@ -38,8 +37,8 @@ Only relevant if your fork is also a public template others copy from, as the
 upstream repo is: committing your ids there hands every downstream fork a config
 pointing at resources they cannot access.
 
-Resource ids are not secrets — they are useless without your account
-credentials — so this is about not confusing forks, not about exposure.
+Resource ids are not secrets: they are useless without your account
+credentials: so this is about not confusing forks, not about exposure.
 
 If you want them out of the committed file, copy it instead of editing it:
 
@@ -57,7 +56,7 @@ changes. `wrangler.jsonc` keeps its placeholders.
 > environment variables the way it reads vars and secrets: `wrangler deploy`
 > treats its config file as the authoritative definition of the Worker,
 > bindings included, on every deploy. They have to be in a file on disk at
-> deploy time. `scripts/wrangler.mjs` picks which file — see
+> deploy time. `scripts/wrangler.mjs` picks which file: see
 > [Deploying](#deploying) below.
 
 ## 2. Validate your collection id
@@ -74,17 +73,16 @@ Details in [`solana-verification.md`](solana-verification.md).
 ## 3. Set secrets
 
 ```bash
-for s in TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET NFT_COLLECTION_ID ADMIN_TELEGRAM_IDS SESSION_SECRET; do pnpm exec wrangler secret put "$s"; done
+for s in TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET NFT_COLLECTION_ID HELIUS_API_KEY ADMIN_TELEGRAM_IDS SESSION_SECRET; do pnpm exec wrangler secret put "$s"; done
 ```
 
-Two secrets are optional:
+`HELIUS_API_KEY` is required unless you set `DAS_ENDPOINT` to a different
+DAS-compatible provider instead. See
+[`solana-verification.md`](solana-verification.md#ownership-queries).
 
-- `HELIUS_API_KEY` — without it, ownership checks fall back to the public
-  Solana RPC (no key needed, no SLA). See
-  [`solana-verification.md`](solana-verification.md#ownership-queries).
-- `TELEGRAM_GROUP_ID` — without it, add the bot to your group after deploying
-  and confirm it conversationally via `/setup`; see
-  [`telegram-setup.md`](telegram-setup.md#5-choose-which-group-to-gate--by-messaging-the-bot).
+`TELEGRAM_GROUP_ID` is optional: without it, add the bot to your group after
+deploying and confirm it conversationally via `/setup`; see
+[`telegram-setup.md`](telegram-setup.md#5-choose-which-group-to-gate-by-messaging-the-bot).
 
 Generate the two random secrets (`SESSION_SECRET`, `TELEGRAM_WEBHOOK_SECRET`) with:
 
@@ -95,17 +93,17 @@ openssl rand -base64 32
 Non-secret behaviour (`MIGRATION_MODE`, `ACCESS_GRACE_PERIOD_HOURS`,
 `CHALLENGE_TTL_SECONDS`, `RECHECK_BATCH_SIZE`, `RECHECK_INTERVAL_HOURS`,
 `APP_NAME`) is also set in the dashboard's "Variables and secrets" screen,
-alongside the secrets above — as plain `Text` values, not `Secret`. Every one
+alongside the secrets above: as plain `Text` values, not `Secret`. Every one
 has a safe fallback if you leave it unset (see `src/env.ts`).
 
 `wrangler.jsonc` deliberately does **not** declare a `vars` block, and sets
 `"keep_vars": true`. Both matter: Wrangler's actual default is to treat the
 config file as authoritative for the Worker's *entire* var set on every
-deploy — anything set in the dashboard but not declared in the file gets
+deploy: anything set in the dashboard but not declared in the file gets
 silently **deleted**, not merely left alone. `keep_vars: true` is what turns
 that off, so dashboard-configured values survive every future deploy. Without
 it, an empty (or absent) `vars` block would wipe every var on the next
-`wrangler deploy` — which is exactly what happened once during this project's
+`wrangler deploy`: which is exactly what happened once during this project's
 own setup, breaking the Worker until it was caught and fixed.
 
 > Never commit secrets. `.dev.vars` and `.env` are gitignored; keep it that way.
@@ -126,7 +124,7 @@ missing) frontend.
 
 ## 5. Register the webhook
 
-Point Telegram at the deployed Worker — see
+Point Telegram at the deployed Worker: see
 [`telegram-setup.md`](telegram-setup.md#5-register-the-webhook).
 
 
@@ -178,13 +176,13 @@ Pick **one** of the two options below. Running both means two `wrangler deploy`
 runs racing each other on every push.
 
 <details>
-<summary>Option A — Cloudflare Workers Builds (dashboard)</summary>
+<summary>Option A: Cloudflare Workers Builds (dashboard)</summary>
 
 Connect the repo under **Workers &amp; Pages → your Worker → Settings → Build**.
 
 Cloudflare's build runner has no `wrangler.local.jsonc`, so give it the ids as
 **build** environment variables. These live under **Settings → Build**, which is
-a different screen from the Worker's own **Variables and Secrets** — putting them
+a different screen from the Worker's own **Variables and Secrets**: putting them
 in the latter does nothing, because the build never sees runtime bindings.
 
 | Build variable | Value |
@@ -202,7 +200,7 @@ The deploy command reads those two build variables and substitutes them itself.
 </details>
 
 <details>
-<summary>Option B — GitHub Actions</summary>
+<summary>Option B: GitHub Actions</summary>
 
 Keeps deploy config in the repo rather than a dashboard. Add four repository
 secrets (**Settings → Secrets and variables → Actions**):
@@ -259,7 +257,7 @@ pnpm run db:migrate:local && pnpm run build:web && pnpm run dev
 
 That serves the built frontend and the API together on `localhost:8787`, exactly
 as in production. For frontend work with hot reload, run `pnpm run dev:web`
-alongside it — Vite proxies `/api` to the Worker on port 8787.
+alongside it: Vite proxies `/api` to the Worker on port 8787.
 
 Telegram cannot reach `localhost`. To exercise the bot locally, expose the port
 with a tunnel and point `setWebhook` at the public URL.
@@ -280,7 +278,7 @@ curl -s "http://localhost:8787/__scheduled?cron=0+*+*+*+*"
 
 The trigger fires the recheck pass; `RECHECK_INTERVAL_HOURS` decides who is
 actually due. Running the trigger more often than the interval is fine and makes
-grace-period expiries land promptly — each run only picks up users who are due,
+grace-period expiries land promptly: each run only picks up users who are due,
 capped at `RECHECK_BATCH_SIZE`.
 
 Sizing: with hourly runs and a batch of 100, the system re-checks up to 2,400
@@ -293,7 +291,7 @@ entries.
 
 For a group that already has members before gating is switched on.
 
-### Phase 1 — deploy with migration mode on
+### Phase 1: deploy with migration mode on
 
 ```
 MIGRATION_MODE=true
@@ -306,15 +304,15 @@ joiners are gated normally from day one.
 This requires `chat_member` in the webhook's `allowed_updates`, otherwise the bot
 never sees the members it is supposed to protect.
 
-### Phase 2 — get people verified
+### Phase 2: get people verified
 
 Announce the change and ask members to DM the bot and run `/verify`. Watch
-progress with `/adminstats` in your own chat with the bot — it reports how many
+progress with `/adminstats` in your own chat with the bot: it reports how many
 legacy members still need to verify.
 
 Give this real time. A week is reasonable; a day is not.
 
-### Phase 3 — switch enforcement on
+### Phase 3: switch enforcement on
 
 When the legacy-unverified count is acceptably low:
 
@@ -346,7 +344,7 @@ Each cron run logs a summary: `checked`, `stillEligible`, `graceStarted`,
 `restored`, `revoked`, `indeterminate`, `noncesPurged`, `errors`.
 
 A rising `indeterminate` count means Helius trouble, not member churn. Nobody is
-being revoked while it is elevated — that is by design — but it does mean
+being revoked while it is elevated (that is by design), but it does mean
 enforcement is paused, so it is worth alerting on.
 
 **Rotate a secret**

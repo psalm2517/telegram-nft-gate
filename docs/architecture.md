@@ -31,7 +31,7 @@ Pages project, and no cross-origin configuration.
 `null` from the router and falls through to `env.ASSETS.fetch(request)`, which
 serves the React bundle. `wrangler.jsonc` sets
 `not_found_handling: "single-page-application"`, so `/verify` resolves to
-`index.html`. There is no `/admin` page — administration is bot commands, see
+`index.html`. There is no `/admin` page: administration is bot commands, see
 below.
 
 `run_worker_first: ["/api/*", "/telegram/*"]` keeps API and webhook traffic off
@@ -77,7 +77,7 @@ which a framework's fire-and-forget helpers do not give you.
 Implemented in `services/access.ts`. Two rules govern every edge:
 
 1. **`INDETERMINATE` is a no-op.** If ownership cannot be determined, nothing
-   changes — not the status, and not even `last_ownership_check_at` (so the user
+   changes: not the status, and not even `last_ownership_check_at` (so the user
    stays at the front of the retry queue instead of waiting a full interval).
 2. **A failed Telegram removal is not a revocation.** If `banChatMember` fails,
    the user stays in `grace` and the next cron run retries. The database never
@@ -101,7 +101,7 @@ UTC strings; Telegram ids are stored as strings because they are int64.
 
 Two indexes carry security weight:
 
-- `idx_users_wallet_unique` — a partial unique index on `wallet_address`,
+- `idx_users_wallet_unique`: a partial unique index on `wallet_address`,
   enforcing one wallet per Telegram account.
 - `verification_nonces.nonce` is `UNIQUE`, and burning it is a conditional
   `UPDATE ... WHERE used_at IS NULL`, so concurrent replays cannot both win.
@@ -138,7 +138,7 @@ on-demand via `/adminrecheck`.
 The cron handler (`src/scheduled.ts`) makes two passes:
 
 1. Users whose last check is older than `RECHECK_INTERVAL_HOURS`.
-2. Grace-period users whose window has closed — so revocation lands on time even
+2. Grace-period users whose window has closed, so revocation lands on time even
    if their ownership check is not otherwise due.
 
 Work is capped at `RECHECK_BATCH_SIZE` per invocation, ordered oldest-check-first
@@ -156,8 +156,8 @@ never gets to assert identity.
 **Administration** has no separate login at all. `/adminstats`,
 `/adminusers`, `/adminrecheck`, `/adminrevoke` and `/adminrestore`
 (`src/bot/bot.ts`) check the caller's Telegram id against `ADMIN_TELEGRAM_IDS`
-on every invocation, and only respond in a private chat. A non-admin — or an
-admin id used from a group — gets a generic `Unknown command.` reply, so
+on every invocation, and only respond in a private chat. A non-admin (or an
+admin id used from a group) gets a generic `Unknown command.` reply, so
 probing command names cannot distinguish "does not exist" from "exists but
 you're not authorized". Removing an id from `ADMIN_TELEGRAM_IDS` and
 redeploying revokes admin access immediately.
@@ -167,9 +167,9 @@ redeploying revokes admin access immediately.
 `TELEGRAM_GROUP_ID` is an optional deploy-time default, not the source of
 truth. `src/config-store.ts` holds two KV-backed values that take precedence:
 
-- `config:telegram_group_id` — the confirmed gate target, set by an admin via
+- `config:telegram_group_id`: the confirmed gate target, set by an admin via
   `/setup confirm` or `/setup group <id>` in `src/bot/bot.ts`.
-- `pending:group_detect` — a group the bot was just added to (detected via the
+- `pending:group_detect`: a group the bot was just added to (detected via the
   `my_chat_member` webhook update), awaiting that confirmation. Expires after
   seven days if nobody acts on it.
 
@@ -177,7 +177,7 @@ truth. `src/config-store.ts` holds two KV-backed values that take precedence:
 present, else `TELEGRAM_GROUP_ID`, else an empty string. This lets an operator
 either pin a group at deploy time (useful for reproducible, config-as-code
 deployments) or skip that entirely and configure it conversationally after the
-Worker is already live — `/setup` can always override a pinned value later,
+Worker is already live: `/setup` can always override a pinned value later,
 since KV wins.
 
 An unconfigured group is not a startup error: `loadConfig` never requires it.
@@ -190,5 +190,5 @@ Telegram API failure.
 
 KV-backed fixed windows on `/verify` and `/status` commands, challenge issuance
 and submission (per Telegram user), and challenge issuance per IP. KV is
-eventually consistent, so this is abuse control, not a hard quota — correctness
+eventually consistent, so this is abuse control, not a hard quota. Correctness
 of the verification flow rests on the single-use nonce in D1, not on the limiter.

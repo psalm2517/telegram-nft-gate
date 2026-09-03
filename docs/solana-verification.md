@@ -2,8 +2,8 @@
 
 Two independent things must both hold before anyone is let in:
 
-1. **Wallet control** — proven by an off-chain ed25519 signature.
-2. **Ownership** — proven by a server-side DAS query.
+1. **Wallet control**, proven by an off-chain ed25519 signature.
+2. **Ownership**, proven by a server-side DAS query.
 
 Neither is taken on the frontend's word.
 
@@ -59,7 +59,7 @@ NFT_COLLECTION_ID=<id> HELIUS_API_KEY=<key> pnpm run validate:collection <mintA>
 ```
 
 It exits `0` on agreement and non-zero with an explanation otherwise. It reports
-discrepancies but **never substitutes or infers a different id** — a wrong
+discrepancies but **never substitutes or infers a different id**: a wrong
 `NFT_COLLECTION_ID` fails setup rather than silently gating on the wrong
 collection.
 
@@ -77,7 +77,7 @@ Established as follows, and reproducible with the commands above:
 | --- | --- |
 | `getAsset` on four independently sourced SBF mints (#2663, #2965, #6503, #1839) | all four group to `J7rx…keMG` |
 | `getAsset` on `J7rx…keMG` | `interface: MplCoreCollection`, name **Solana Business Frogs** |
-| Verified creator on the collection | `fucK1fTHKvo4dsiAug26vsR8au3GH3HzDLA5R1ad1zp` — the same address that prefixes every member's metadata URI |
+| Verified creator on the collection | `fucK1fTHKvo4dsiAug26vsR8au3GH3HzDLA5R1ad1zp` (the same address that prefixes every member's metadata URI) |
 | `getAssetsByGroup` full enumeration | 9,873 live assets, every one named `Solana Business Frogs #N` and carrying that grouping |
 
 The collection is **MPL Core**, not Token Metadata. This changes nothing in the
@@ -88,12 +88,12 @@ application: DAS presents both through the same `grouping` model and the same
 
 ## Ownership queries
 
-By default, queries go to the public Solana RPC
-(`https://api.mainnet-beta.solana.com`), which serves the same DAS methods as
-Helius — no API key required. Setting `HELIUS_API_KEY` switches to Helius's
-endpoint instead, which is recommended once the gate has real volume: the
-public RPC carries no SLA or published rate limit. `DAS_ENDPOINT` overrides
-either, for a self-hosted or third-party DAS-compatible RPC.
+`HELIUS_API_KEY` is required: queries go to Helius's DAS endpoint using it.
+There is no unauthenticated fallback, so a deployment without a key fails to
+start rather than silently running ownership checks against a rate-limited,
+no-SLA public endpoint. `DAS_ENDPOINT` overrides Helius entirely, for a
+self-hosted or third-party DAS-compatible RPC, if you would rather use one of
+those instead.
 
 ```json
 {

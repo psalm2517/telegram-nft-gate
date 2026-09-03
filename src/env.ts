@@ -21,7 +21,7 @@ export interface Env {
   TELEGRAM_GROUP_ID?: string;
   TELEGRAM_WEBHOOK_SECRET?: string;
   NFT_COLLECTION_ID: string;
-  /** Optional: omit to fall back to the public Solana RPC (see DAS_ENDPOINT). */
+  /** Required unless DAS_ENDPOINT points at a different DAS-compatible provider. */
   HELIUS_API_KEY?: string;
   /** Optional: point ownership queries at any DAS-compatible RPC instead of Helius. */
   DAS_ENDPOINT?: string;
@@ -81,6 +81,9 @@ export const configSchema = z.object({
   recheckBatchSize: z.number().int().min(1).max(1000),
   recheckIntervalHours: z.number().int().min(1).max(24 * 30),
   publicBaseUrl: z.string().url().optional(),
+}).refine((c) => Boolean(c.heliusApiKey || c.dasEndpoint), {
+  message: 'HELIUS_API_KEY is required unless DAS_ENDPOINT is set to a different DAS-compatible provider',
+  path: ['heliusApiKey'],
 });
 
 export type Config = Omit<z.infer<typeof configSchema>, 'telegramGroupId'> & {
@@ -92,17 +95,6 @@ export type Config = Omit<z.infer<typeof configSchema>, 'telegramGroupId'> & {
    */
   telegramGroupId: string;
 };
-
-/**
- * Default DAS-compatible endpoint used when no HELIUS_API_KEY is configured.
- *
- * The public Solana RPC serves the same DAS methods (getAsset, searchAssets,
- * getAssetsByGroup) as Helius. It carries no SLA or published rate limit, so
- * it is a reasonable default for getting started or for low-volume gates, but
- * a dedicated Helius key is recommended for anything running at scale — see
- * docs/solana-verification.md.
- */
-export const PUBLIC_SOLANA_RPC = 'https://api.mainnet-beta.solana.com';
 
 export class ConfigError extends Error {
   constructor(public readonly issues: string[]) {
@@ -141,14 +133,9 @@ export function loadConfig(env: Env): Config {
     );
   }
 
-  // Neither HELIUS_API_KEY nor DAS_ENDPOINT is individually required, but the
-  // ownership checker needs *some* endpoint to query — default to the public
-  // Solana RPC rather than leaving this ambiguous.
+  // The refine above guarantees at least one of these is set.
   const dasEndpoint =
-    parsed.data.dasEndpoint ??
-    (parsed.data.heliusApiKey
-      ? `https://mainnet.helius-rpc.com/?api-key=${parsed.data.heliusApiKey}`
-      : PUBLIC_SOLANA_RPC);
+    parsed.data.dasEndpoint ?? `https://mainnet.helius-rpc.com/?api-key=${parsed.data.heliusApiKey}`;
 
   return { ...parsed.data, dasEndpoint, telegramGroupId: parsed.data.telegramGroupId ?? '' };
 }
