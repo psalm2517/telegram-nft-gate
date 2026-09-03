@@ -17,9 +17,22 @@ pnpm exec wrangler d1 create telegram-nft-gate
 pnpm exec wrangler kv namespace create KV
 ```
 
-Copy the returned `database_id` and namespace `id` into `wrangler.jsonc`,
-replacing the zero placeholders. Set `name` to whatever you want the Worker
-called.
+`wrangler.jsonc` stays committed with zero placeholders — it's the template
+every fork shares. Your real `database_id` and KV `id` go in a copy that
+never gets tracked:
+
+```bash
+cp wrangler.jsonc wrangler.local.jsonc
+```
+
+Edit `wrangler.local.jsonc` (already gitignored) with the `database_id` and
+namespace `id` the two commands above returned, and `name` if you want the
+Worker called something other than `telegram-nft-gate`. From here on, deploy
+with:
+
+```bash
+pnpm exec wrangler deploy -c wrangler.local.jsonc
+```
 
 ## 2. Validate your collection id
 
@@ -177,7 +190,8 @@ Give this real time. A week is reasonable; a day is not.
 
 When the legacy-unverified count is acceptably low:
 
-1. Set `MIGRATION_MODE=false` in `wrangler.jsonc` and redeploy.
+1. Set `MIGRATION_MODE=false` in the dashboard's "Variables and secrets"
+   screen (or `.dev.vars` for local dev) and redeploy.
 2. The next cron run treats legacy members like everyone else: unverified and
    non-holding members enter the grace period, get a warning DM, and are removed
    only after `ACCESS_GRACE_PERIOD_HOURS`.

@@ -2,6 +2,7 @@ node_modules/
 dist/
 web/dist/
 .wrangler/
+wrangler.local.jsonc
 .dev.vars
 .dev.vars.*
 .env

@@ -75,15 +75,22 @@ pnpm install
 cp .env.example .dev.vars     # then fill in real values
 ```
 
-Create your Cloudflare resources and put the returned ids into `wrangler.jsonc`:
+Create your Cloudflare resources:
 
 ```bash
 pnpm exec wrangler d1 create telegram-nft-gate
-```
-
-```bash
 pnpm exec wrangler kv namespace create KV
 ```
+
+`wrangler.jsonc` stays committed with zero placeholders. Put your real ids in
+a gitignored copy instead:
+
+```bash
+cp wrangler.jsonc wrangler.local.jsonc   # then fill in the ids above
+```
+
+`pnpm run dev`, `deploy`, and the `db:migrate:*` scripts all point at
+`wrangler.local.jsonc` already — see [`deployment.md`](docs/deployment.md).
 
 Validate your collection id against the chain **before** going live:
 

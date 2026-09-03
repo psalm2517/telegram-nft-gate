@@ -16,11 +16,18 @@
     "run_worker_first": ["/api/*", "/telegram/*"]
   },
 
+  // database_id and the KV namespace id below are resource identifiers, not
+  // secrets, but they are still specific to one operator's Cloudflare account
+  // and don't belong in a repo other communities fork. This file keeps zero
+  // placeholders and is never edited with real values.
+  //
+  // Copy it to `wrangler.local.jsonc` (gitignored — see docs/deployment.md),
+  // fill in your real database_id/KV id there, and deploy with:
+  //   pnpm exec wrangler deploy -c wrangler.local.jsonc
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "telegram-nft-gate",
-      // Replace with your own database id from `wrangler d1 create telegram-nft-gate`.
       "database_id": "00000000-0000-0000-0000-000000000000",
       "migrations_dir": "migrations"
     }
@@ -29,7 +36,6 @@
   "kv_namespaces": [
     {
       "binding": "KV",
-      // Replace with your own namespace id from `wrangler kv namespace create KV`.
       "id": "00000000000000000000000000000000"
     }
   ],
