@@ -15,6 +15,8 @@
 
 ---
 
+![The NFT Gate landing page](docs/images/hero.png)
+
 A member proves they control a wallet holding at least one NFT from a configured
 collection, and the bot grants them access. Ownership is re-checked on a
 schedule; if it lapses, the member gets a grace period, a warning, and a chance
