@@ -15,7 +15,7 @@
 
 ---
 
-![The NFT Gate landing page](docs/images/hero.png)
+![NFT Gate](docs/images/og.png)
 
 A member proves they control a wallet holding at least one NFT from a configured
 collection, and the bot grants them access. Ownership is re-checked on a
