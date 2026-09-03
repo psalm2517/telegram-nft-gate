@@ -48,8 +48,9 @@ describe('access state machine', () => {
     expect(ctx.fakeTelegram.invites).toHaveLength(0);
   });
 
-  it('tells an already-eligible user they reconfirmed, not that a link is coming', async () => {
+  it('tells an already-eligible, still-present user they reconfirmed, not that a link is coming', async () => {
     const user = await seedUser(ctx, '1', { status: 'eligible', verified_at: hoursAgo(1) });
+    ctx.fakeTelegram.membership.set('1', true);
 
     const decision = await ctx.access.applyOwnership(user, 'OWNED', { source: 'verification' });
     expect(decision.newStatus).toBe('eligible');
@@ -59,6 +60,20 @@ describe('access state machine', () => {
     // Telegram message at all, while the web page still tells them to check
     // their chat "for your invite link" — a link that never arrives.
     expect(decision.notify).toBeTruthy();
+  });
+
+  it('issues a fresh invite to an eligible user who left the group voluntarily', async () => {
+    // Leaving the group is not a tracked transition (see the bot's
+    // chat_member handler) — DB status stays `eligible` exactly as if they'd
+    // never left. Telegram's own membership check is the only thing that can
+    // tell "still inside" apart from "eligible but needs back in".
+    const user = await seedUser(ctx, '1', { status: 'eligible', verified_at: hoursAgo(1) });
+    ctx.fakeTelegram.membership.set('1', false);
+
+    const decision = await ctx.access.applyOwnership(user, 'OWNED', { source: 'verification' });
+    expect(decision.newStatus).toBe('eligible');
+    expect(decision.inviteLink).toBeTruthy();
+    expect(ctx.fakeTelegram.invites).toHaveLength(1);
   });
 
   it('starts a grace period when an eligible holder loses their NFT', async () => {

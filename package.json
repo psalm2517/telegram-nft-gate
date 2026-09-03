@@ -14,7 +14,7 @@
     "dev:web": "vite --config web/vite.config.ts",
     "build": "pnpm run build:web && pnpm run build:worker",
     "build:web": "vite build --config web/vite.config.ts",
-    "build:worker": "wrangler deploy -c wrangler.local.jsonc --dry-run --outdir=.wrangler/build",
+    "build:worker": "wrangler deploy --dry-run --outdir=.wrangler/build",
     "deploy": "pnpm run build:web && wrangler deploy -c wrangler.local.jsonc",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p web/tsconfig.json && tsc --noEmit -p scripts/tsconfig.json",
     "lint": "eslint .",

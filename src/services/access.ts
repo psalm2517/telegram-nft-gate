@@ -89,39 +89,39 @@ export class AccessService {
       result: 'owned',
     });
 
-    if (wasAlreadyEligible) {
-      return {
-        previousStatus,
-        newStatus: 'eligible',
-        changed: false,
-        ownership: 'OWNED',
-        reason: 'still_eligible',
-        notify: 'Ownership reconfirmed. You are already verified and your access is active — no new invite link needed.',
-      };
+    if (!wasAlreadyEligible) {
+      await this.db.recordAccessEvent({
+        telegramUserId: user.telegram_user_id,
+        action: previousStatus === 'grace' ? 'grace_cleared' : 'granted',
+        previousState: previousStatus,
+        newState: 'eligible',
+        reason: source,
+      });
     }
 
-    await this.db.recordAccessEvent({
-      telegramUserId: user.telegram_user_id,
-      action: previousStatus === 'grace' ? 'grace_cleared' : 'granted',
-      previousState: previousStatus,
-      newState: 'eligible',
-      reason: source,
-    });
-
-    // Someone already inside the group (grace period, or a legacy member) does
-    // not need a new link — only a user who is actually outside does.
     const decision: AccessDecision = {
       previousStatus,
       newStatus: 'eligible',
-      changed: true,
+      changed: !wasAlreadyEligible,
       ownership: 'OWNED',
-      reason: previousStatus === 'grace' ? 'eligibility_restored' : 'access_granted',
+      reason: wasAlreadyEligible
+        ? 'still_eligible'
+        : previousStatus === 'grace'
+          ? 'eligibility_restored'
+          : 'access_granted',
     };
 
+    // DB status alone cannot tell a member in good standing apart from one who
+    // left voluntarily: leaving the group is not a tracked transition (see the
+    // bot's chat_member handler), so status stays `eligible` either way. Only
+    // Telegram's own membership check can distinguish "already inside, no link
+    // needed" from "eligible but outside, needs a fresh link to get back in" —
+    // including for someone re-verifying who was eligible all along.
     const membership = await this.telegram.isMember(user.telegram_user_id);
     if (membership.ok && membership.value) {
-      decision.notify =
-        previousStatus === 'grace'
+      decision.notify = wasAlreadyEligible
+        ? 'Ownership reconfirmed. You are already verified and your access is active — no new invite link needed.'
+        : previousStatus === 'grace'
           ? 'Ownership confirmed again — your access is restored. No action needed.'
           : 'Ownership confirmed. Your access is active.';
       return decision;
