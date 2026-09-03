@@ -7,7 +7,9 @@ import {
   type ChallengeResponse,
   type PublicConfig,
 } from './lib/api';
+import { applyBrandIcon } from './lib/brand';
 import { fallbackUrlFor, isMobileBrowser, KNOWN_WALLETS } from './lib/knownWallets';
+import { PageChrome } from './PageChrome';
 import {
   connectWallet,
   listCompatibleWallets,
@@ -33,7 +35,13 @@ export function Verify() {
   const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
-    api.get<PublicConfig>('/api/config').then(setConfig).catch(() => setConfig(null));
+    api
+      .get<PublicConfig>('/api/config')
+      .then((c) => {
+        setConfig(c);
+        applyBrandIcon(c.iconUrl);
+      })
+      .catch(() => setConfig(null));
   }, []);
 
   useEffect(() => {
@@ -105,18 +113,20 @@ export function Verify() {
 
   if (!token) {
     return (
-      <div className="wrap">
-        <h1>Verification link required</h1>
-        <div className="card">
-          <p>
-            This page can only be opened through the personal link the bot sends you.
-          </p>
-          <p className="muted">
-            Open Telegram, message the bot, and send <span className="mono">/verify</span> to get
-            a fresh link. Links expire after 15 minutes.
-          </p>
+      <PageChrome appName={config?.appName ?? 'NFT Gate'} iconUrl={config?.iconUrl}>
+        <div className="wrap">
+          <h1>Verification link required</h1>
+          <div className="card">
+            <p>
+              This page can only be opened through the personal link the bot sends you.
+            </p>
+            <p className="muted">
+              Open Telegram, message the bot, and send <span className="mono">/verify</span> to get
+              a fresh link. Links expire after 15 minutes.
+            </p>
+          </div>
         </div>
-      </div>
+      </PageChrome>
     );
   }
 
@@ -127,8 +137,16 @@ export function Verify() {
     : `Prove you control a wallet holding ${nftPhrase} to unlock access.`;
 
   return (
+    <PageChrome appName={config?.appName ?? 'NFT Gate'} iconUrl={config?.iconUrl}>
     <div className="wrap">
-      <h1>{heading}</h1>
+      {config?.iconUrl ? (
+        <div className="avatar-row">
+          <img src={config.iconUrl} alt="" />
+          <h1 style={{ margin: 0 }}>{heading}</h1>
+        </div>
+      ) : (
+        <h1>{heading}</h1>
+      )}
       <p className="muted">{bodyText}</p>
 
       <div className="card">
@@ -257,6 +275,9 @@ export function Verify() {
 
       {step === 'done' && (
         <div className="card">
+          {config?.successIconUrl && (
+            <img className="success-image" src={config.successIconUrl} alt="" />
+          )}
           <p>Return to your Telegram chat with the bot: your invite link is waiting there.</p>
           <p className="muted">
             The invite link is single-use and expires shortly, so use it soon.
@@ -271,5 +292,6 @@ export function Verify() {
         </p>
       )}
     </div>
+    </PageChrome>
   );
 }

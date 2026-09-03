@@ -59,6 +59,10 @@ export interface PublicConfig {
   collectionId: string;
   gracePeriodHours: number;
   migrationMode: boolean;
+  /** Operator-configured favicon/avatar image, or null for the default mark. */
+  iconUrl: string | null;
+  /** Operator-configured image for the "verification complete" screen. */
+  successIconUrl: string | null;
 }
 
 export interface ChallengeResponse {

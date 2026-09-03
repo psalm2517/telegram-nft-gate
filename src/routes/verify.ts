@@ -123,5 +123,9 @@ export async function handlePublicConfig(ctx: AppContext): Promise<Response> {
     collectionId: ctx.config.nftCollectionId,
     gracePeriodHours: ctx.config.gracePeriodHours,
     migrationMode: ctx.config.migrationMode,
+    // Purely cosmetic, operator-configured. null for the vast majority of
+    // forks, which get a generic default icon instead.
+    iconUrl: ctx.config.brandIconUrl ?? null,
+    successIconUrl: ctx.config.brandSuccessIconUrl ?? ctx.config.brandIconUrl ?? null,
   });
 }

@@ -15,6 +15,10 @@ export interface Env {
   RECHECK_INTERVAL_HOURS?: string;
   JOIN_VERIFICATION_HOURS?: string;
   PUBLIC_BASE_URL?: string;
+  /** Optional: a small square image shown as the favicon and verify-page avatar. */
+  BRAND_ICON_URL?: string;
+  /** Optional: image shown on the "verification complete" screen. Falls back to BRAND_ICON_URL. */
+  BRAND_SUCCESS_ICON_URL?: string;
 
   // secrets
   TELEGRAM_BOT_TOKEN: string;
@@ -89,6 +93,13 @@ export const configSchema = z.object({
    */
   joinVerificationHours: z.number().int().min(0).max(24 * 30),
   publicBaseUrl: z.string().url().optional(),
+  /**
+   * Purely cosmetic. Collection-agnostic on purpose: this repo is a shared
+   * open-source template, so a specific community's branding is operator
+   * config, never a hardcoded asset in the tracked source.
+   */
+  brandIconUrl: z.string().url().optional(),
+  brandSuccessIconUrl: z.string().url().optional(),
 }).refine((c) => Boolean(c.heliusApiKey || c.dasEndpoint), {
   message: 'HELIUS_API_KEY is required unless DAS_ENDPOINT is set to a different DAS-compatible provider',
   path: ['heliusApiKey'],
@@ -134,6 +145,8 @@ export function loadConfig(env: Env): Config {
     recheckIntervalHours: intFromString(12, 1, 24 * 30).parse(env.RECHECK_INTERVAL_HOURS),
     joinVerificationHours: intFromString(1, 0, 24 * 30).parse(env.JOIN_VERIFICATION_HOURS),
     publicBaseUrl: env.PUBLIC_BASE_URL || undefined,
+    brandIconUrl: env.BRAND_ICON_URL || undefined,
+    brandSuccessIconUrl: env.BRAND_SUCCESS_ICON_URL || undefined,
   });
 
   if (!parsed.success) {

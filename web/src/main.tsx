@@ -1,5 +1,8 @@
-import { StrictMode } from 'react';
+import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { api, type PublicConfig } from './lib/api';
+import { applyBrandIcon } from './lib/brand';
+import { PageChrome } from './PageChrome';
 import { Verify } from './Verify';
 import './styles.css';
 
@@ -11,21 +14,35 @@ import './styles.css';
  */
 function App() {
   const path = window.location.pathname;
+  const [config, setConfig] = useState<PublicConfig | null>(null);
+  useEffect(() => {
+    if (path.startsWith('/verify')) return;
+    api
+      .get<PublicConfig>('/api/config')
+      .then((c) => {
+        setConfig(c);
+        applyBrandIcon(c.iconUrl);
+      })
+      .catch(() => setConfig(null));
+  }, [path]);
+
   if (path.startsWith('/verify')) return <Verify />;
 
   return (
-    <div className="wrap">
-      <h1>NFT-gated Telegram access</h1>
-      <div className="card">
-        <p>
-          This site verifies Solana NFT ownership for a private Telegram group.
-        </p>
-        <p className="muted">
-          To get started, message the group's Telegram bot and send{' '}
-          <span className="mono">/verify</span>. It will send you a personal link to this site.
-        </p>
+    <PageChrome appName={config?.appName ?? 'NFT Gate'} iconUrl={config?.iconUrl}>
+      <div className="wrap">
+        <h1>NFT-gated Telegram access</h1>
+        <div className="card">
+          <p>
+            This site verifies Solana NFT ownership for a private Telegram group.
+          </p>
+          <p className="muted">
+            To get started, message the group's Telegram bot and send{' '}
+            <span className="mono">/verify</span>. It will send you a personal link to this site.
+          </p>
+        </div>
       </div>
-    </div>
+    </PageChrome>
   );
 }
 
