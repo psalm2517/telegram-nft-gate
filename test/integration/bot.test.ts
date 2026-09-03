@@ -336,6 +336,29 @@ describe('group setup via the bot', () => {
     expect(sent.find((c) => c.method === 'sendMessage')).toBeUndefined();
   });
 
+  it('leaves immediately when added to a different group while one is already configured', async () => {
+    const CONFIGURED_GROUP_ID = -100555444;
+    await env.KV.put('config:telegram_group_id', String(CONFIGURED_GROUP_ID));
+
+    await sendUpdate(myChatMemberUpdate('administrator')); // added to NEW_GROUP_ID, not the configured one
+
+    // Never gets a chance to become a hijack vector: no pending slot, no
+    // "reply to confirm" prompt anyone in that group could act on.
+    expect(await env.KV.get('pending:group_detect')).toBeNull();
+
+    const left = sent.find((c) => c.method === 'leaveChat');
+    expect(left?.body.chat_id).toBe(String(NEW_GROUP_ID));
+
+    const dm = sent.find(
+      (c) => c.method === 'sendMessage' && c.body.chat_id === String(ADMIN_ID),
+    );
+    expect(String(dm?.body.text)).toMatch(/already gate a different group, so I left/);
+    expect(String(dm?.body.text)).not.toMatch(/\/setup confirm/);
+
+    // The configured group is untouched.
+    expect(await env.KV.get('config:telegram_group_id')).toBe(String(CONFIGURED_GROUP_ID));
+  });
+
   it('/setup with nothing configured explains how to get started', async () => {
     await sendUpdate(setupCommand('/setup'));
     const text = String(sent.find((c) => c.method === 'sendMessage')?.body.text);

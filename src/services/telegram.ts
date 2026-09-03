@@ -158,6 +158,15 @@ export class TelegramClient {
     return this.call('getChat', { chat_id: chatId });
   }
 
+  /**
+   * Leave an arbitrary chat: not scoped to the configured group, since this
+   * exists specifically to get the bot back out of a group that is *not* the
+   * configured one (see the my_chat_member handler in bot.ts).
+   */
+  async leaveChat(chatId: string): Promise<TelegramOutcome<void>> {
+    return this.call('leaveChat', { chat_id: chatId });
+  }
+
   /** True when the user is currently inside the group in any non-exiting state. */
   async isMember(userId: string): Promise<TelegramOutcome<boolean>> {
     const res = await this.getChatMember(userId);

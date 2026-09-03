@@ -566,6 +566,12 @@ export function createBot(deps: BotDeps, botInfo?: UserFromGetMe): Bot {
   /**
    * Detect being added to a group and ask an admin to confirm it via /setup,
    * rather than requiring TELEGRAM_GROUP_ID to be known before deploy.
+   *
+   * Once a group is confirmed, being added anywhere else is not a setup event,
+   * it's noise at best and a hijack attempt at worst: anyone who can add the
+   * bot to a chat could otherwise get it to DM every admin an inviting
+   * "reply /setup confirm" prompt. So past that point the bot leaves
+   * immediately instead of asking, and never touches the pending-group slot.
    */
   bot.on('my_chat_member', async (ctx) => {
     const update = ctx.myChatMember;
@@ -579,6 +585,19 @@ export function createBot(deps: BotDeps, botInfo?: UserFromGetMe): Bot {
     const title = update.chat.title ?? groupId;
     const configuredId = await getConfiguredGroupId(deps.kv);
     if (configuredId === groupId) return; // already the confirmed group, nothing to do
+
+    if (configuredId) {
+      await deps.telegram.leaveChat(groupId).catch(() => {});
+      const text = [
+        `I was added to "${title}" (${groupId}) but already gate a different group, so I left.`,
+        'No action needed. To point me at a new group instead, remove me from the current',
+        'one first, then add me to the new one and confirm with /setup.',
+      ].join('\n');
+      for (const admin of deps.config.adminTelegramIds) {
+        await deps.telegram.sendMessage(admin, text).catch(() => {});
+      }
+      return;
+    }
 
     await setPendingGroup(deps.kv, { id: groupId, title, detectedAt: new Date().toISOString() });
 
