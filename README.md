@@ -141,7 +141,7 @@ specific collection or community is baked into the code. See
 | --- | --- |
 | `TELEGRAM_BOT_TOKEN` | Bot credential from @BotFather |
 | `TELEGRAM_GROUP_ID` | The gated group's chat id. Optional: leave unset and confirm it by messaging the bot (`/setup`) instead |
-| `TELEGRAM_WEBHOOK_SECRET` | Shared secret proving updates came from Telegram |
+| `TELEGRAM_WEBHOOK_SECRET` | Shared secret proving updates came from Telegram. Required — the webhook refuses all updates until it is set |
 | `NFT_COLLECTION_ID` | Canonical on-chain certified collection id |
 | `HELIUS_API_KEY` | DAS access — server-side only, never exposed. Optional: omit to use the public Solana RPC instead (see `DAS_ENDPOINT`) |
 | `ADMIN_TELEGRAM_IDS` | Telegram user ids allowed to run admin bot commands |

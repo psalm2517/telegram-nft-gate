@@ -41,16 +41,30 @@ export async function handleTelegramWebhook(
   ctx: AppContext,
 ): Promise<Response> {
   const expected = ctx.config.telegramWebhookSecret;
-  if (expected) {
-    const provided = request.headers.get('x-telegram-bot-api-secret-token') ?? '';
-    if (!timingSafeEqual(expected, provided)) {
-      // Returned rather than thrown: an unauthenticated caller hitting the
-      // webhook is an expected, routine event, not an exceptional one.
-      return json(
-        { error: 'invalid_webhook_secret', message: 'Invalid webhook secret.' },
-        { status: 403 },
-      );
-    }
+
+  // Fail closed. An unset secret used to skip this check entirely, which is the
+  // worst possible default: real Telegram traffic still flows, so nothing looks
+  // broken, while anyone who can guess this URL can forge an update carrying an
+  // admin's `from.id` and drive the admin commands in src/bot/bot.ts.
+  if (!expected) {
+    console.error(
+      'TELEGRAM_WEBHOOK_SECRET is not set; refusing all webhook updates. ' +
+        'Set it to the same secret_token registered with setWebhook.',
+    );
+    return json(
+      { error: 'webhook_not_configured', message: 'Webhook is not configured.' },
+      { status: 503 },
+    );
+  }
+
+  const provided = request.headers.get('x-telegram-bot-api-secret-token') ?? '';
+  if (!timingSafeEqual(expected, provided)) {
+    // Returned rather than thrown: an unauthenticated caller hitting the
+    // webhook is an expected, routine event, not an exceptional one.
+    return json(
+      { error: 'invalid_webhook_secret', message: 'Invalid webhook secret.' },
+      { status: 403 },
+    );
   }
 
   const botInfo = await loadBotInfo(ctx);
