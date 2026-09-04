@@ -1,6 +1,6 @@
 {
   "name": "telegram-nft-gate",
-  "version": "1.0.0",
+  "version": "0.1.2",
   "description": "Verify Solana NFT ownership and gate access to a private Telegram group. Collection-agnostic, runs on a single Cloudflare Worker.",
   "license": "MIT",
   "private": false,
